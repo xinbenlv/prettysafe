@@ -1,0 +1,19 @@
+{
+  "name": "create2crunch-webgpu",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "benchmark": "bun run benchmark.ts",
+    "test": "bun run test.ts",
+    "start": "vite"
+  },
+  "dependencies": {
+    "@webgpu/types": "^0.1.68",
+    "bun-webgpu": "^0.1.4",
+    "ethers": "^6.16.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vite": "^6.0.0"
+  }
+}
