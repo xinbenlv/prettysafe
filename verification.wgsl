@@ -1,8 +1,8 @@
-// WebGPU Compute Shader for Keccak256 (Create2 Crunching)
-// Translated from OpenCL kernel
+// Copy of keccak.wgsl but modified to output the full digest for verification
+// ... (Include all helper functions from keccak.wgsl)
 
+// 64-bit integer emulation
 alias u64 = vec2<u32>;
-
 fn make_u64(low: u32, high: u32) -> u64 { return vec2<u32>(low, high); }
 fn xor_u64(a: u64, b: u64) -> u64 { return vec2<u32>(a.x ^ b.x, a.y ^ b.y); }
 fn and_u64(a: u64, b: u64) -> u64 { return vec2<u32>(a.x & b.x, a.y & b.y); }
@@ -19,12 +19,17 @@ struct Params {
     nonce_high: u32,
     threshold: u32,
     mode: u32,
-    padding: u32,
 }
 
 @group(0) @binding(0) var<storage, read> template_state: array<u32, 50>;
 @group(0) @binding(1) var<uniform> params: Params;
-@group(0) @binding(2) var<storage, read_write> solutions: array<u32, 2>;
+// Output buffer: First 32 bytes = Hash output. Second 32 bytes = Debug info?
+@group(0) @binding(2) var<storage, read_write> output: array<u32, 8>;
+
+// Keccak functions (theta, rhoPi, chi, iota, keccakf) - Simplified copy paste
+// To save space/tokens I will assume the same implementation as keccak.wgsl
+// I will just implement the `keccakf` wrapper which calls the steps.
+// Actually I need to include them.
 
 fn theta(a: ptr<function, array<u64, 25>>) {
     var b: array<u64, 5>;
@@ -110,26 +115,44 @@ fn keccakf(a: ptr<function, array<u64, 25>>) {
     theta(a); rhoPi(a); chi(a); iota(a, make_u64(0x80008008u, 0x80000000u));
 }
 
-@compute @workgroup_size(256)
+@compute @workgroup_size(1)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var state: array<u64, 25>;
     for (var i = 0u; i < 25u; i++) { state[i] = make_u64(template_state[i*2], template_state[i*2 + 1]); }
 
-    let nonce_low = global_id.x;
-    let nonce_high = params.nonce_high;
+    // Use hardcoded nonce for single test
+    // Nonce Low from params via global_id (we will dispatch 1 thread with correct nonce?)
+    // No, better to pass nonce via uniform/buffer for single test.
+    // Or assume global_id.x is the Low Nonce.
 
-    let n0 = (nonce_low) & 0xFFu;
-    let n1 = (nonce_low >> 8u) & 0xFFu;
-    let n2 = (nonce_low >> 16u) & 0xFFu;
-    let n3 = (nonce_low >> 24u) & 0xFFu;
+    // We will set global_id.x to nonceLow in the dispatch (offset) or just pass it?
+    // Dispatch is (1,1,1). global_id.x = 0.
+    // So we need to ADD the nonceLow.
+    // Or just overwrite it.
+
+    // Let's assume we use the injected nonce logic:
+    let nonce_low = params.threshold; // Hack: passing nonceLow via 'threshold' param for this test?
+    // Actually, let's just use the values passed in uniforms if possible.
+    // But uniform is `params`.
+    // params.nonce_high is High.
+    // params.threshold - use this for Low?
+
+    let nLow = params.threshold;
+    let nHigh = params.nonce_high;
+
+    // Apply Nonce Injection Logic
+    let n0 = (nLow) & 0xFFu;
+    let n1 = (nLow >> 8u) & 0xFFu;
+    let n2 = (nLow >> 16u) & 0xFFu;
+    let n3 = (nLow >> 24u) & 0xFFu;
 
     let s5y_mask = 0x000000FFu;
     state[5].y = (state[5].y & s5y_mask) | (n0 << 8u) | (n1 << 16u) | (n2 << 24u);
 
-    let n4 = (nonce_high) & 0xFFu;
-    let n5 = (nonce_high >> 8u) & 0xFFu;
-    let n6 = (nonce_high >> 16u) & 0xFFu;
-    let n7 = (nonce_high >> 24u) & 0xFFu;
+    let n4 = (nHigh) & 0xFFu;
+    let n5 = (nHigh >> 8u) & 0xFFu;
+    let n6 = (nHigh >> 16u) & 0xFFu;
+    let n7 = (nHigh >> 24u) & 0xFFu;
 
     state[6].x = n3 | (n4 << 8u) | (n5 << 16u) | (n6 << 24u);
     let s6y_mask = 0xFFFFFF00u;
@@ -137,10 +160,49 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     keccakf(&state);
 
-    let digest_word0 = state[1].y;
-    // Benchmark check (simplistic)
-    if (digest_word0 == 0u) {
-        solutions[0] = nonce_low;
-        solutions[1] = nonce_high;
-    }
+    // Output digest
+    // sponge[12]..sponge[15] -> state[1].y (u32)
+    // sponge[16]..sponge[19] -> state[2].x (u32)
+    // sponge[20]..sponge[23] -> state[2].y (u32)
+    // sponge[24]..sponge[27] -> state[3].x (u32)
+    // sponge[28]..sponge[31] -> state[3].y (u32)
+
+    // Create2 hash is 32 bytes.
+    // sponge + 12 is start.
+    // Bytes 0-3: state[1].y
+    // Bytes 4-7: state[2].x
+    // Bytes 8-11: state[2].y
+    // Bytes 12-15: state[3].x
+    // Bytes 16-19: state[3].y
+    // Bytes 20-23: state[4].x
+    // Bytes 24-27: state[4].y
+    // Bytes 28-31: state[0].x ??? No.
+    // sponge is linear.
+    // state[0] = 0..7
+    // state[1] = 8..15
+    // state[2] = 16..23
+    // state[3] = 24..31
+    // state[4] = 32..39
+
+    // Digest starts at 12.
+    // 12..15 in state[1] (High part).
+    // 16..23 in state[2] (Low, High).
+    // 24..31 in state[3] (Low, High).
+    // 32..39 in state[4] (Low, High). Wait, Create2 is 32 bytes?
+    // Keccak output is 32 bytes?
+    // 12 + 32 = 44.
+    // So 12..43.
+    // 32..39 in state[4].
+    // 40..43 in state[5] (Low part).
+
+    // So we output:
+    output[0] = state[1].y;
+    output[1] = state[2].x;
+    output[2] = state[2].y;
+    output[3] = state[3].x;
+    output[4] = state[3].y;
+    output[5] = state[4].x;
+    output[6] = state[4].y;
+    output[7] = state[5].x;
 }
+

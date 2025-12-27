@@ -1,57 +1,6 @@
 import { join } from "path";
 import { ethers } from "ethers";
-
-// Known valid test case extracted earlier
-const TEST_CASE = {
-    factoryAddress: "0x4e59b44847b379578588920ca78fbf26c0b4956c",
-    saltPrefix: "0x0000000000000000000000000000000000000000",
-    saltMidLE: 0x31c2f9eb, // "eb f9 c2 31"
-    nonceLow: 0x99ec0da2, // "fa d1 d3 39" -> but hex string was "fad1d33999ec0da2". Wait.
-    // In extraction I parsed:
-    // Nonce High = 0xfad1d339 (No, High was last part?)
-    // Let's re-verify the mapping from my successful run.
-    // In `validate.ts`:
-    // SaltData (32 bytes).
-    // Mid = 40..48 (4 bytes)
-    // Low = 48..56 (4 bytes)
-    // High = 56..64 (4 bytes)
-    //
-    // Salt: ...ebf9c231 fad1d339 99ec0da2
-    // Mid: ebf9c231
-    // Next 4 bytes: fad1d339
-    // Next 4 bytes: 99ec0da2
-    //
-    // In `validate.ts` I reversed them to LE.
-    // reverseHex("fad1d339") -> "39d3d1fa" -> 0x39d3d1fa.
-    // reverseHex("99ec0da2") -> "a20dec99" -> 0xa20dec99.
-    //
-    // `nonceLow` corresponds to `global_id.x`.
-    // `nonceHigh` corresponds to `params.x`.
-    //
-    // In `keccak.wgsl` (and `verification.wgsl`):
-    // `nonce_low = global_id.x`
-    // `nonce_high = params.x`
-    // Bytes 0-3 of Nonce Block come from Low.
-    // Bytes 4-7 of Nonce Block come from High.
-    //
-    // In Salt: [Prefix 20] [Mid 4] [NonceBlock 8]
-    // NonceBlock = [Byte 0..3] [Byte 4..7]
-    // "fad1d339" are bytes 0..3 of NonceBlock.
-    // So this is Low.
-    // "99ec0da2" are bytes 4..7 of NonceBlock.
-    // So this is High.
-
-    // So:
-    // Nonce Low Bytes: fa d1 d3 39
-    // Nonce High Bytes: 99 ec 0d a2
-
-    // As u32 LE values:
-    nonceLow: 0x39d3d1fa,
-    nonceHigh: 0xa20dec99,
-
-    initCodeHash: "0x1d34e4a585a1a5a873534f4560f8d06292b66a174493fe2b99331a68cae46baa",
-    expectedAddress: "0x20177BA2c39BAdD04B43a3D6BBe8a92a22957681" // Computed by Ethers with these inputs
-};
+import { MAINNET_CREATE2_TESTCASES } from "./test-data.ts";
 
 async function main() {
   console.log("🧪 Running WebGPU Create2 Tests...");
@@ -76,20 +25,52 @@ async function main() {
   if (!adapter) process.exit(1);
   const device = await adapter.requestDevice();
 
-  // Run Test Case 1
-  const passed = await runTest(device, TEST_CASE);
+  let passedCount = 0;
+  for (const testCase of MAINNET_CREATE2_TESTCASES) {
+      const passed = await runTest(device, testCase);
+      if (passed) passedCount++;
+  }
 
-  if (passed) {
-      console.log("\n✅ All Tests Passed!");
+  if (passedCount === MAINNET_CREATE2_TESTCASES.length) {
+      console.log(`\n✅ All ${passedCount} Tests Passed!`);
       process.exit(0);
   } else {
-      console.log("\n❌ Tests Failed.");
+      console.log(`\n❌ ${MAINNET_CREATE2_TESTCASES.length - passedCount} Tests Failed.`);
       process.exit(1);
   }
 }
 
 async function runTest(device: GPUDevice, testCase: any) {
-    console.log(`\nTest Case: Validating against ${testCase.expectedAddress}...`);
+    console.log(`\nTest Case: ${testCase.name}`);
+    console.log(`Target: ${testCase.expectedAddress}`);
+
+    // Parse Salt
+    // Salt is 32 bytes hex string.
+    // We need to extract:
+    // Prefix (20 bytes) -> Bytes 0..19
+    // Mid (4 bytes) -> Bytes 20..23
+    // Low (4 bytes) -> Bytes 24..27
+    // High (4 bytes) -> Bytes 28..31
+
+    const saltHex = testCase.salt.startsWith("0x") ? testCase.salt.slice(2) : testCase.salt;
+    if (saltHex.length !== 64) {
+        console.error(`Invalid salt length: ${saltHex.length}`);
+        return false;
+    }
+
+    const prefixHex = saltHex.slice(0, 40); // 20 bytes * 2 chars
+    const midHex = saltHex.slice(40, 48); // 4 bytes
+    const lowHex = saltHex.slice(48, 56); // 4 bytes
+    const highHex = saltHex.slice(56, 64); // 4 bytes
+
+    // Convert to Little Endian u32 values for Mid, Low, High
+    // The hex string "AABBCCDD" represents bytes [AA, BB, CC, DD].
+    // As a u32 on LE machine, this is 0xDDCCBBAA.
+    const reverseHex = (s: string) => s.match(/../g)!.reverse().join('');
+
+    const midLE = parseInt(reverseHex(midHex), 16);
+    const lowLE = parseInt(reverseHex(lowHex), 16);
+    const highLE = parseInt(reverseHex(highHex), 16);
 
     // Load Verification Shader
     const shaderCode = await Bun.file(join(import.meta.dir, "verification.wgsl")).text();
@@ -100,15 +81,21 @@ async function runTest(device: GPUDevice, testCase: any) {
     const sponge = new Uint8Array(templateState.buffer);
 
     sponge[0] = 0xff;
-    const factoryBytes = ethers.getBytes(testCase.factoryAddress);
+
+    // Factory Address
+    const factoryBytes = ethers.getBytes(testCase.deployer);
     for(let i=0; i<20; i++) sponge[1+i] = factoryBytes[i];
-    const saltPrefixBytes = ethers.getBytes(testCase.saltPrefix);
-    for(let i=0; i<20; i++) sponge[21+i] = saltPrefixBytes[i];
+
+    // Salt Prefix
+    const prefixBytes = ethers.getBytes("0x" + prefixHex);
+    for(let i=0; i<20; i++) sponge[21+i] = prefixBytes[i];
+
+    // InitCodeHash
     const hashBytes = ethers.getBytes(testCase.initCodeHash);
     for(let i=0; i<32; i++) sponge[53+i] = hashBytes[i];
 
     // Mid
-    const midBytes = new Uint8Array(new Uint32Array([testCase.saltMidLE]).buffer);
+    const midBytes = new Uint8Array(new Uint32Array([midLE]).buffer);
     sponge[41] = midBytes[0];
     sponge[42] = midBytes[1];
     sponge[43] = midBytes[2];
@@ -125,8 +112,8 @@ async function runTest(device: GPUDevice, testCase: any) {
 
     // Params
     const paramsArray = new Uint32Array([
-        testCase.nonceHigh,
-        testCase.nonceLow, // Passed as threshold hack
+        highLE, // nonce_high
+        lowLE,  // threshold (used as nonce_low hack)
         0, 0
     ]);
     const paramsBuffer = device.createBuffer({
@@ -178,10 +165,15 @@ async function runTest(device: GPUDevice, testCase: any) {
     // Address is first 20 bytes of result (due to shader outputting sponge[12..])
     const address = "0x" + resultHex.slice(2, 42);
 
-    console.log(`Expected: ${testCase.expectedAddress.toLowerCase()}`);
-    console.log(`Actual:   ${address.toLowerCase()}`);
+    console.log(`Computed: ${address.toLowerCase()}`);
 
-    return address.toLowerCase() === testCase.expectedAddress.toLowerCase();
+    if (address.toLowerCase() === testCase.expectedAddress.toLowerCase()) {
+        console.log(`✅ MATCH`);
+        return true;
+    } else {
+        console.log(`❌ MISMATCH`);
+        return false;
+    }
 }
 
 main().catch(console.error);

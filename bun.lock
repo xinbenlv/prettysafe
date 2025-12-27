@@ -2,7 +2,7 @@
   "lockfileVersion": 1,
   "workspaces": {
     "": {
-      "name": "src-webgpu",
+      "name": "create2crunch-webgpu",
       "dependencies": {
         "@webgpu/types": "^0.1.68",
         "bun-webgpu": "^0.1.4",
