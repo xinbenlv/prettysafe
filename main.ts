@@ -75,9 +75,10 @@ async function runBenchmark() {
             ],
         });
 
-        const workgroupSize = 256;
-        const dispatchCount = 65535;
-        const itemsPerDispatch = workgroupSize * dispatchCount;
+        const workgroupSize = 64;
+        const dispatchCountX = 65535;
+        const dispatchCountY = 16;
+        const itemsPerDispatch = workgroupSize * dispatchCountX * dispatchCountY;
 
         let totalHashes = 0;
         const startTime = performance.now();
@@ -94,7 +95,7 @@ async function runBenchmark() {
             const pass = commandEncoder.beginComputePass();
             pass.setPipeline(pipeline);
             pass.setBindGroup(0, bindGroup);
-            pass.dispatchWorkgroups(dispatchCount);
+            pass.dispatchWorkgroups(dispatchCountX, dispatchCountY);
             pass.end();
 
             device.queue.submit([commandEncoder.finish()]);

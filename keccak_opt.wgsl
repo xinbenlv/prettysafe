@@ -1,4 +1,4 @@
-// WebGPU Compute Shader for Keccak256 Verification - Optimized
+// WebGPU Compute Shader for Keccak256 (Create2 Crunching) - Optimized
 
 alias u64 = vec2<u32>;
 
@@ -7,7 +7,7 @@ fn xor_u64(a: u64, b: u64) -> u64 { return vec2<u32>(a.x ^ b.x, a.y ^ b.y); }
 fn and_u64(a: u64, b: u64) -> u64 { return vec2<u32>(a.x & b.x, a.y & b.y); }
 fn not_u64(a: u64) -> u64 { return vec2<u32>(~a.x, ~a.y); }
 
-// Optimized rotates
+// Optimized rotates avoiding branches
 fn rol_lo(x: u64, n: u32) -> u64 {
     return vec2<u32>((x.x << n) | (x.y >> (32u - n)), (x.y << n) | (x.x >> (32u - n)));
 }
@@ -17,15 +17,19 @@ fn rol_hi(x: u64, n: u32) -> u64 {
     return vec2<u32>((x.y << shift) | (x.x >> (32u - shift)), (x.x << shift) | (x.y >> (32u - shift)));
 }
 
+// Keeping rol_u64 for theta (calls with 1u) if needed, but theta uses 1u which is < 32.
+// Actually theta uses rol_u64(..., 1u).
+
 struct Params {
     nonce_high: u32,
     threshold: u32,
     mode: u32,
+    padding: u32,
 }
 
 @group(0) @binding(0) var<storage, read> template_state: array<u32, 50>;
 @group(0) @binding(1) var<uniform> params: Params;
-@group(0) @binding(2) var<storage, read_write> output: array<u32, 8>;
+@group(0) @binding(2) var<storage, read_write> solutions: array<u32, 2>;
 
 fn theta(a: ptr<function, array<u64, 25>>) {
     var b: array<u64, 5>;
@@ -36,6 +40,7 @@ fn theta(a: ptr<function, array<u64, 25>>) {
     b[3] = xor_u64(xor_u64(xor_u64(xor_u64((*a)[3], (*a)[8]), (*a)[13]), (*a)[18]), (*a)[23]);
     b[4] = xor_u64(xor_u64(xor_u64(xor_u64((*a)[4], (*a)[9]), (*a)[14]), (*a)[19]), (*a)[24]);
 
+    // rol_u64(..., 1u) -> rol_lo(..., 1u)
     t = xor_u64(b[4], rol_lo(b[1], 1u)); (*a)[0] = xor_u64((*a)[0], t); (*a)[5] = xor_u64((*a)[5], t); (*a)[10] = xor_u64((*a)[10], t); (*a)[15] = xor_u64((*a)[15], t); (*a)[20] = xor_u64((*a)[20], t);
     t = xor_u64(b[0], rol_lo(b[2], 1u)); (*a)[1] = xor_u64((*a)[1], t); (*a)[6] = xor_u64((*a)[6], t); (*a)[11] = xor_u64((*a)[11], t); (*a)[16] = xor_u64((*a)[16], t); (*a)[21] = xor_u64((*a)[21], t);
     t = xor_u64(b[1], rol_lo(b[3], 1u)); (*a)[2] = xor_u64((*a)[2], t); (*a)[7] = xor_u64((*a)[7], t); (*a)[12] = xor_u64((*a)[12], t); (*a)[17] = xor_u64((*a)[17], t); (*a)[22] = xor_u64((*a)[22], t);
@@ -45,6 +50,7 @@ fn theta(a: ptr<function, array<u64, 25>>) {
 
 fn rhoPi(a: ptr<function, array<u64, 25>>) {
     var t: u64; var b0: u64;
+    // Using specialized rol_lo/rol_hi based on shift count
     t = (*a)[1]; b0 = (*a)[10]; (*a)[10] = rol_lo(t, 1u);
     t = b0; b0 = (*a)[7]; (*a)[7] = rol_lo(t, 3u);
     t = b0; b0 = (*a)[11]; (*a)[11] = rol_lo(t, 6u);
@@ -73,8 +79,9 @@ fn rhoPi(a: ptr<function, array<u64, 25>>) {
 
 fn chi(a: ptr<function, array<u64, 25>>) {
     var b: array<u64, 5>;
+    // Unrolled loop for i = 0, 5, 10, 15, 20
 
-    // Unrolled loop for i = 0
+    // i = 0
     b[0] = (*a)[0]; b[1] = (*a)[1]; b[2] = (*a)[2]; b[3] = (*a)[3]; b[4] = (*a)[4];
     (*a)[0] = xor_u64(b[0], and_u64(not_u64(b[1]), b[2]));
     (*a)[1] = xor_u64(b[1], and_u64(not_u64(b[2]), b[3]));
@@ -144,13 +151,13 @@ fn keccakf(a: ptr<function, array<u64, 25>>) {
     theta(a); rhoPi(a); chi(a); iota(a, make_u64(0x80008008u, 0x80000000u));
 }
 
-@compute @workgroup_size(1)
+@compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var state: array<u64, 25>;
     for (var i = 0u; i < 25u; i++) { state[i] = make_u64(template_state[i*2], template_state[i*2 + 1]); }
 
-    let nonce_low = params.threshold;
-    let nHigh = params.nonce_high;
+    let nonce_low = global_id.x;
+    let nonce_high = params.nonce_high;
 
     let n0 = (nonce_low) & 0xFFu;
     let n1 = (nonce_low >> 8u) & 0xFFu;
@@ -160,10 +167,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let s5y_mask = 0x000000FFu;
     state[5].y = (state[5].y & s5y_mask) | (n0 << 8u) | (n1 << 16u) | (n2 << 24u);
 
-    let n4 = (nHigh) & 0xFFu;
-    let n5 = (nHigh >> 8u) & 0xFFu;
-    let n6 = (nHigh >> 16u) & 0xFFu;
-    let n7 = (nHigh >> 24u) & 0xFFu;
+    let n4 = (nonce_high) & 0xFFu;
+    let n5 = (nonce_high >> 8u) & 0xFFu;
+    let n6 = (nonce_high >> 16u) & 0xFFu;
+    let n7 = (nonce_high >> 24u) & 0xFFu;
 
     state[6].x = n3 | (n4 << 8u) | (n5 << 16u) | (n6 << 24u);
     let s6y_mask = 0xFFFFFF00u;
@@ -171,12 +178,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     keccakf(&state);
 
-    output[0] = state[1].y;
-    output[1] = state[2].x;
-    output[2] = state[2].y;
-    output[3] = state[3].x;
-    output[4] = state[3].y;
-    output[5] = state[4].x;
-    output[6] = state[4].y;
-    output[7] = state[5].x;
+    let digest_word0 = state[1].y;
+    // Benchmark check (simplistic)
+    if (digest_word0 == 0u) {
+        solutions[0] = nonce_low;
+        solutions[1] = nonce_high;
+    }
 }
+

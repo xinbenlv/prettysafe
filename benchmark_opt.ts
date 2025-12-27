@@ -20,7 +20,7 @@ async function main() {
   const targetSeconds = values.sec ? parseInt(values.sec) : 5;
   const targetHashes = values.hash ? parseInt(values.hash) : 0; // 0 means use seconds
 
-  console.log("🚀 Initializing WebGPU Keccak256 Benchmark...");
+  console.log("🚀 Initializing WebGPU Keccak256 Benchmark (Optimized)...");
   if (targetHashes > 0) {
       console.log(`🎯 Target: ${targetHashes} hashes`);
   } else {
@@ -52,8 +52,8 @@ async function main() {
   const device = await adapter.requestDevice();
   console.log(`💻 Using GPU: ${adapter.info.vendor} ${adapter.info.architecture}`);
 
-  // Load WGSL shader
-  const shaderCode = await Bun.file(join(import.meta.dir, "keccak.wgsl")).text();
+  // Load Optimized WGSL shader
+  const shaderCode = await Bun.file(join(import.meta.dir, "keccak_opt.wgsl")).text();
   const shaderModule = device.createShaderModule({ code: shaderCode });
 
   // Setup Buffers
@@ -104,10 +104,9 @@ async function main() {
   });
 
   // Benchmark Loop
-  const workgroupSize = 64;
-  const dispatchCountX = 65535;
-  const dispatchCountY = 16;
-  const totalItemsPerDispatch = workgroupSize * dispatchCountX * dispatchCountY;
+  const workgroupSize = 64; // Updated workgroup size
+  const dispatchCount = 65535;
+  const totalItemsPerDispatch = workgroupSize * dispatchCount;
 
   let totalHashesCalculated = 0;
   let iterations = 0;
@@ -130,7 +129,7 @@ async function main() {
       const passEncoder = commandEncoder.beginComputePass();
       passEncoder.setPipeline(pipeline);
       passEncoder.setBindGroup(0, bindGroup);
-      passEncoder.dispatchWorkgroups(dispatchCountX, dispatchCountY);
+      passEncoder.dispatchWorkgroups(dispatchCount);
       passEncoder.end();
 
       device.queue.submit([commandEncoder.finish()]);
@@ -150,10 +149,11 @@ async function main() {
   const durationSec = (currentTime - startTime) / 1000;
   const hashrate = totalHashesCalculated / durationSec;
 
-  console.log(`📊 Results:`);
+  console.log(`📊 Results (Optimized):`);
   console.log(`   Duration: ${durationSec.toFixed(4)}s`);
   console.log(`   Total Hashes: ${totalHashesCalculated.toLocaleString()}`);
   console.log(`   Hashrate: ${(hashrate / 1_000_000).toFixed(2)} MH/s`);
 }
 
 main().catch(console.error);
+

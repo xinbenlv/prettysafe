@@ -1,4 +1,4 @@
-// WebGPU Compute Shader for Keccak256 Verification - Optimized
+// WebGPU Compute Shader for Keccak256 (Create2 Crunching) - Optimized 2D Dispatch
 
 alias u64 = vec2<u32>;
 
@@ -21,11 +21,12 @@ struct Params {
     nonce_high: u32,
     threshold: u32,
     mode: u32,
+    padding: u32,
 }
 
 @group(0) @binding(0) var<storage, read> template_state: array<u32, 50>;
 @group(0) @binding(1) var<uniform> params: Params;
-@group(0) @binding(2) var<storage, read_write> output: array<u32, 8>;
+@group(0) @binding(2) var<storage, read_write> solutions: array<u32, 2>;
 
 fn theta(a: ptr<function, array<u64, 25>>) {
     var b: array<u64, 5>;
@@ -144,13 +145,16 @@ fn keccakf(a: ptr<function, array<u64, 25>>) {
     theta(a); rhoPi(a); chi(a); iota(a, make_u64(0x80008008u, 0x80000000u));
 }
 
-@compute @workgroup_size(1)
+@compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var state: array<u64, 25>;
     for (var i = 0u; i < 25u; i++) { state[i] = make_u64(template_state[i*2], template_state[i*2 + 1]); }
 
-    let nonce_low = params.threshold;
-    let nHigh = params.nonce_high;
+    // X dimension is 65535 * 64 items = 4194240
+    let index = global_id.x + global_id.y * 4194240u;
+
+    let nonce_low = index;
+    let nonce_high = params.nonce_high;
 
     let n0 = (nonce_low) & 0xFFu;
     let n1 = (nonce_low >> 8u) & 0xFFu;
@@ -160,10 +164,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let s5y_mask = 0x000000FFu;
     state[5].y = (state[5].y & s5y_mask) | (n0 << 8u) | (n1 << 16u) | (n2 << 24u);
 
-    let n4 = (nHigh) & 0xFFu;
-    let n5 = (nHigh >> 8u) & 0xFFu;
-    let n6 = (nHigh >> 16u) & 0xFFu;
-    let n7 = (nHigh >> 24u) & 0xFFu;
+    let n4 = (nonce_high) & 0xFFu;
+    let n5 = (nonce_high >> 8u) & 0xFFu;
+    let n6 = (nonce_high >> 16u) & 0xFFu;
+    let n7 = (nonce_high >> 24u) & 0xFFu;
 
     state[6].x = n3 | (n4 << 8u) | (n5 << 16u) | (n6 << 24u);
     let s6y_mask = 0xFFFFFF00u;
@@ -171,12 +175,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     keccakf(&state);
 
-    output[0] = state[1].y;
-    output[1] = state[2].x;
-    output[2] = state[2].y;
-    output[3] = state[3].x;
-    output[4] = state[3].y;
-    output[5] = state[4].x;
-    output[6] = state[4].y;
-    output[7] = state[5].x;
+    let digest_word0 = state[1].y;
+    // Benchmark check (simplistic)
+    if (digest_word0 == 0u) {
+        solutions[0] = nonce_low;
+        solutions[1] = nonce_high;
+    }
 }
+
