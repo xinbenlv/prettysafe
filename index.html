@@ -4,30 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WebGPU Create2 Benchmark</title>
-    <style>
-      body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; background: #1a1a1a; color: #fff; }
-      button { padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; background: #646cff; border: none; color: white; border-radius: 4px; }
-      button:hover { background: #535bf2; }
-      button:disabled { background: #444; cursor: not-allowed; }
-      pre { background: #2a2a2a; padding: 1rem; overflow-x: auto; border-radius: 4px; }
-      .status { padding: 1rem; margin: 1rem 0; border-radius: 4px; }
-      .success { background: #1b4d2e; }
-      .error { background: #4d1b1b; }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   </head>
   <body>
-    <h1>WebGPU Create2 Benchmark</h1>
-    <div id="status" class="status">Checking WebGPU support...</div>
-
-    <div>
-        <label>Duration (sec): <input type="number" id="duration" value="5" min="1" max="60" style="padding: 0.5rem;"></label>
-        <button id="startBtn" disabled>Start Benchmark</button>
-    </div>
-
-    <h3>Logs</h3>
-    <pre id="logs"></pre>
-
-    <script type="module" src="/main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

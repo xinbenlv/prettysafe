@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "module": "esnext",
     "target": "esnext",
     "moduleResolution": "bundler",
@@ -17,7 +17,8 @@
     "allowJs": true,
     "types": [
       "bun-types",
-      "@webgpu/types" // Add WebGPU types
+      "@webgpu/types"
     ]
-  }
+  },
+  "include": ["src", "*.ts", "*.tsx"]
 }
