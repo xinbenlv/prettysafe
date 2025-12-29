@@ -1,6 +1,14 @@
 import { join } from "path";
 import { parseArgs } from "util";
 
+// Benchmark configuration
+const CONFIG = {
+  shaderFile: "keccak.wgsl",
+  workgroupSize: 64,
+  dispatchX: 65535,
+  dispatchY: 16,
+};
+
 // Define arguments
 const { values } = parseArgs({
   args: Bun.argv,
@@ -53,7 +61,7 @@ async function main() {
   console.log(`💻 Using GPU: ${adapter.info.vendor} ${adapter.info.architecture}`);
 
   // Load WGSL shader
-  const shaderCode = await Bun.file(join(import.meta.dir, "keccak.wgsl")).text();
+  const shaderCode = await Bun.file(join(import.meta.dir, CONFIG.shaderFile)).text();
   const shaderModule = device.createShaderModule({ code: shaderCode });
 
   // Setup Buffers
@@ -104,10 +112,7 @@ async function main() {
   });
 
   // Benchmark Loop
-  const workgroupSize = 64;
-  const dispatchCountX = 65535;
-  const dispatchCountY = 16;
-  const totalItemsPerDispatch = workgroupSize * dispatchCountX * dispatchCountY;
+  const totalItemsPerDispatch = CONFIG.workgroupSize * CONFIG.dispatchX * CONFIG.dispatchY;
 
   let totalHashesCalculated = 0;
   let iterations = 0;
@@ -130,7 +135,7 @@ async function main() {
       const passEncoder = commandEncoder.beginComputePass();
       passEncoder.setPipeline(pipeline);
       passEncoder.setBindGroup(0, bindGroup);
-      passEncoder.dispatchWorkgroups(dispatchCountX, dispatchCountY);
+      passEncoder.dispatchWorkgroups(CONFIG.dispatchX, CONFIG.dispatchY);
       passEncoder.end();
 
       device.queue.submit([commandEncoder.finish()]);

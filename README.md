@@ -1,76 +1,78 @@
-# WebGPU Create2 Cruncher (Created by gemini-3-pro-preview)
+# WebGPU Create2 Cruncher
 
-This project implements an Ethereum **Create2** address mining kernel using **WebGPU**. It is a port of the OpenCL kernel from `create2crunch` to WGSL.
+A high-performance Ethereum **CREATE2** address mining tool using **WebGPU**. Ported from the OpenCL kernel of `create2crunch` to WGSL.
 
 ## Features
 
-- **Cross-Platform**: Runs in browsers (Chrome, Edge, etc.) and headless environments (Bun/Node).
-- **High Performance**: Uses WebGPU Compute Shaders.
-- **64-bit Emulation**: Implements 64-bit integer arithmetic (XOR, ROT, AND, NOT) in WGSL using `vec2<u32>` since native `u64` is not yet widely supported in WebGPU.
+- **Cross-Platform**: Runs in browsers (Chrome, Edge, etc.) and headless environments (Bun).
+- **High Performance**: Uses WebGPU Compute Shaders with 2D dispatch for optimal GPU utilization.
+- **64-bit Emulation**: Implements 64-bit integer arithmetic in WGSL using `vec2<u32>`.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) (for CLI tools and package management).
-- A **WebGPU-compatible Browser** (Chrome 113+, Edge 113+) OR a system with drivers supporting Vulkan/Metal/DirectX12 for headless mode.
+- [Bun](https://bun.sh) for CLI tools and package management.
+- A WebGPU-compatible system (Vulkan/Metal/DirectX12) or browser (Chrome 113+, Edge 113+).
 
 ## Installation
 
 ```bash
-cd src-webgpu
 bun install
 ```
 
 ## Usage
 
-### 1. Headless Benchmark (CLI)
-
-Runs the kernel in a headless environment (using `bun-webgpu`) to measure raw hashrate.
+### 1. Benchmark (CLI)
 
 ```bash
 # Run for 5 seconds (default)
 bun run benchmark
 
-# Run for 10 seconds
+# Run for custom duration
 bun run benchmark --sec 10
 
-# Run until 100 Million hashes
+# Run until specific hash count
 bun run benchmark --hash 100000000
 ```
 
-### 2. Validation Test
+### 2. Tests
 
-Runs a single-shot test case against a known Ethereum Mainnet deployment to verify the hashing logic matches `ethers.js`.
+Validates the Keccak-256 implementation against known Ethereum mainnet CREATE2 deployments.
 
 ```bash
 bun run test
 ```
 
-Expected Output:
-```
-✅ All Tests Passed!
-```
-
-### 3. Browser Benchmark (GUI)
-
-Launches a local web server. Open the link in a browser to run the benchmark on your GPU via the browser's WebGPU implementation.
+### 3. Browser Benchmark
 
 ```bash
 bun start
 ```
 Visit `http://localhost:5173`.
 
+## Project Structure
+
+```
+├── benchmark.ts       # CLI benchmark runner
+├── test.ts           # Test suite for CREATE2 verification
+├── test-data.ts      # Mainnet test cases (Uniswap, OpenSea, etc.)
+├── keccak.wgsl       # Main Keccak-256 compute shader (2D dispatch)
+├── verification.wgsl # Shader for test verification
+├── main.ts           # Browser benchmark UI
+└── index.html        # Web interface
+```
+
 ## Architecture
 
-### Kernel (`keccak.wgsl`)
-- **Input**: A "Template State" (200 bytes) representing the pre-calculated Keccak state of `0xff ++ Factory ++ SaltPrefix`.
-- **Nonce Injection**: The kernel injects a 64-bit nonce into the state at specific byte offsets (bytes 45-52) corresponding to the salt's variable part.
-- **Keccak-f[1600]**: Runs the full 24-round permutation.
-- **Output**: Checks if the resulting hash meets a threshold (e.g., leading zeros). For benchmarking, it calculates the hash unconditionally.
+### Keccak Shader (`keccak.wgsl`)
+- **Input**: Template state (200 bytes) with pre-calculated `0xff ++ Factory ++ SaltPrefix`.
+- **Nonce Injection**: 64-bit nonce injected at bytes 45-52.
+- **Keccak-f[1600]**: Full 24-round permutation.
+- **2D Dispatch**: 65535 × 16 workgroups for maximum parallelism.
 
 ### 64-bit Emulation
-WebGPU (WGSL) does not guaranteed support for `u64`. We emulate it using `vec2<u32>` (Low, High words).
-- `xor_u64`: Component-wise XOR.
-- `rol_u64`: Bitwise rotation handling carry-over between words.
+WGSL lacks native `u64`, so we use `vec2<u32>` (low, high) with custom operations:
+- `xor_u64`: Component-wise XOR
+- `rol_lo/rol_hi`: Rotation handling cross-word carry
 
-### Verification
-The logic was validated against the deployment of `0x0000000000cf80E7Cf8Fa4480907f692177f8e06` on Ethereum Mainnet. The WebGPU kernel produces the exact same Keccak-256 hash as `ethers.getCreate2Address`.
+### Validation
+Verified against real mainnet deployments including Uniswap Permit2, OpenSea Seaport, and Uniswap v4 PoolManager.
