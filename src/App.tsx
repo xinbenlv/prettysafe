@@ -113,50 +113,26 @@ function App() {
         <div className="max-w-4xl mx-auto w-full px-4 py-4 pr-24">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="PrettySafe" className="h-10 w-10" />
+              <img
+                src={theme === 'dark' ? '/logo-dark-transparent.png' : '/logo.png'}
+                alt="PrettySafe"
+                className="h-10 w-10"
+              />
               <span className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>PrettySafe</span>
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* Mode Switcher */}
-              <div className="glass-card p-1 inline-flex gap-1">
-                <button
-                  onClick={() => setMode('miner')}
-                  className={`px-5 py-2 rounded-lg font-medium transition-all duration-300 text-sm ${
-                    mode === 'miner'
-                      ? 'bg-primary text-white'
-                      : 'hover:bg-primary/10'
-                  }`}
-                  style={{ color: mode === 'miner' ? 'white' : 'var(--color-text-secondary)' }}
-                >
-                  Safe Miner
-                </button>
-                <button
-                  onClick={() => setMode('benchmark')}
-                  className={`px-5 py-2 rounded-lg font-medium transition-all duration-300 text-sm ${
-                    mode === 'benchmark'
-                      ? 'bg-primary text-white'
-                      : 'hover:bg-primary/10'
-                  }`}
-                  style={{ color: mode === 'benchmark' ? 'white' : 'var(--color-text-secondary)' }}
-                >
-                  Benchmark
-                </button>
-              </div>
-
-              {/* Theme Toggle */}
-              <button
-                onClick={toggleTheme}
-                className="theme-toggle"
-                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                {theme === 'dark' ? (
-                  <SunIcon className="w-5 h-5" />
-                ) : (
-                  <MoonIcon className="w-5 h-5" />
-                )}
-              </button>
-            </div>
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="theme-toggle"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? (
+                <SunIcon className="w-5 h-5" />
+              ) : (
+                <MoonIcon className="w-5 h-5" />
+              )}
+            </button>
           </div>
         </div>
       </header>
@@ -167,13 +143,43 @@ function App() {
         {/* Hero Section */}
         <section className="text-center space-y-4">
           <h1 className="text-4xl md:text-5xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
-            {mode === 'miner' ? 'Vanity Safe Address Mining' : 'WebGPU Benchmark'}
+            {mode === 'miner' ? 'Pretty Safe' : 'WebGPU Benchmark'}
           </h1>
           <p className="text-lg max-w-2xl mx-auto" style={{ color: 'var(--color-text-secondary)' }}>
             {mode === 'miner'
-              ? 'Mine beautiful vanity addresses for your Gnosis Safe using GPU-accelerated computation'
-              : 'Compare GPU-accelerated Keccak256 hashing performance against CPU-based Create2 address computation'}
+              ? <>The World's First Browser-Native WebGPU-powered Vanity Address Miner for Safe.<wbr />{' '}
+               Mine locally with native GPU performance—Open Source, No Installs, and 100% Client-Side.<wbr />{' '}
+               No CUDA or NVIDIA 5090 needed; works on every browser, from MacBooks to iPhones.</>
+              : `Compare GPU-accelerated Keccak256 hashing performance against CPU-based Create2 address computation`}
           </p>
+
+          {/* Mode Switcher - moved from header */}
+          <div className="flex justify-center">
+            <div className="glass-card p-1 inline-flex gap-1">
+              <button
+                onClick={() => setMode('miner')}
+                className={`px-5 py-2 rounded-lg font-medium transition-all duration-300 text-sm ${
+                  mode === 'miner'
+                    ? 'bg-primary text-white'
+                    : 'hover:bg-primary/10'
+                }`}
+                style={{ color: mode === 'miner' ? 'white' : 'var(--color-text-secondary)' }}
+              >
+                Safe Miner
+              </button>
+              <button
+                onClick={() => setMode('benchmark')}
+                className={`px-5 py-2 rounded-lg font-medium transition-all duration-300 text-sm ${
+                  mode === 'benchmark'
+                    ? 'bg-primary text-white'
+                    : 'hover:bg-primary/10'
+                }`}
+                style={{ color: mode === 'benchmark' ? 'white' : 'var(--color-text-secondary)' }}
+              >
+                Benchmark
+              </button>
+            </div>
+          </div>
         </section>
 
         {/* Content based on mode */}
