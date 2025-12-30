@@ -18,24 +18,48 @@ interface DeployPanelProps {
   bestAddress: Address;
   bestNonce: bigint;
   initializer: Hex;
-  defaultChainId?: number;
+  selectedChainId: number;
 }
 
 type DeployStatus = 'idle' | 'connecting' | 'switching' | 'deploying' | 'confirming' | 'success' | 'error';
 
-export default function DeployPanel({ bestAddress, bestNonce, initializer, defaultChainId = 1 }: DeployPanelProps) {
+export default function DeployPanel({ bestAddress, bestNonce, initializer, selectedChainId }: DeployPanelProps) {
   const [walletState, setWalletState] = useState<WalletState>({
     connected: false,
     address: null,
     chainId: null,
     error: null,
   });
-  const [selectedChainId, setSelectedChainId] = useState<number>(defaultChainId);
   const [deployStatus, setDeployStatus] = useState<DeployStatus>('idle');
   const [txHash, setTxHash] = useState<Hex | null>(null);
   const [deployedAddress, setDeployedAddress] = useState<Address | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Track previous props to detect changes
+  const [prevBestAddress, setPrevBestAddress] = useState<Address>(bestAddress);
+  const [prevBestNonce, setPrevBestNonce] = useState<bigint>(bestNonce);
+  const [prevChainId, setPrevChainId] = useState<number>(selectedChainId);
+
+  // Reset deploy state when props change (network, address, or nonce)
+  useEffect(() => {
+    const propsChanged =
+      bestAddress !== prevBestAddress ||
+      bestNonce !== prevBestNonce ||
+      selectedChainId !== prevChainId;
+
+    if (propsChanged) {
+      // Reset deployment state when configuration changes
+      if (deployStatus !== 'deploying' && deployStatus !== 'confirming') {
+        setDeployStatus('idle');
+        setError(null);
+        setTxHash(null);
+        setDeployedAddress(null);
+      }
+      setPrevBestAddress(bestAddress);
+      setPrevBestNonce(bestNonce);
+      setPrevChainId(selectedChainId);
+    }
+  }, [bestAddress, bestNonce, selectedChainId, prevBestAddress, prevBestNonce, prevChainId, deployStatus]);
 
   // Check wallet state on mount
   useEffect(() => {
@@ -45,10 +69,6 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, defau
   const checkWallet = async () => {
     const state = await getWalletState();
     setWalletState(state);
-    // If connected and on a supported network, update selected chain
-    if (state.connected && state.chainId && isSupportedNetwork(state.chainId)) {
-      setSelectedChainId(state.chainId);
-    }
   };
 
   const handleConnect = useCallback(async () => {
@@ -78,23 +98,19 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, defau
     }
   }, [selectedChainId]);
 
-  const handleNetworkChange = useCallback(async (chainId: number) => {
-    setSelectedChainId(chainId);
+  const handleSwitchNetwork = useCallback(async () => {
+    setDeployStatus('switching');
     setError(null);
 
-    // If already connected, try to switch network
-    if (walletState.connected && walletState.chainId !== chainId) {
-      setDeployStatus('switching');
-      const switched = await switchToChain(chainId);
-      if (!switched) {
-        setError(`Failed to switch to ${getNetworkConfig(chainId)?.name}. Please switch manually.`);
-        setDeployStatus('error');
-        return;
-      }
-      await checkWallet();
-      setDeployStatus('idle');
+    const switched = await switchToChain(selectedChainId);
+    if (!switched) {
+      setError(`Failed to switch to ${getNetworkConfig(selectedChainId)?.name}. Please switch manually.`);
+      setDeployStatus('error');
+      return;
     }
-  }, [walletState.connected, walletState.chainId]);
+    await checkWallet();
+    setDeployStatus('idle');
+  }, [selectedChainId]);
 
   const handleDeploy = useCallback(async () => {
     // Re-check wallet state before deploying (handles page refresh cases)
@@ -208,7 +224,7 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, defau
               Please switch to {selectedNetworkConfig?.name || 'the selected network'} to deploy.
             </p>
             <button
-              onClick={() => handleNetworkChange(selectedChainId)}
+              onClick={handleSwitchNetwork}
               disabled={deployStatus === 'switching'}
               className="text-yellow-300 text-sm underline hover:text-yellow-100"
             >

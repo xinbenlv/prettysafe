@@ -524,50 +524,74 @@ export default function SafeMinerPanel() {
             </div>
           </div>
 
-          {/* Unified Salt Input */}
+          {/* Unified Salt Input with Mining Button */}
           <div className="border-t border-white/10 pt-4 mt-4">
             <label htmlFor="salt" className="block text-white/80 font-medium mb-2">
               Salt {miningState.bestNonce !== null ? '(Mined)' : '(Custom)'}
             </label>
-            <div className="relative">
-              <input
-                id="salt"
-                type="text"
-                value={saltInput}
-                onChange={(e) => setSaltInput(e.target.value)}
-                placeholder="Enter salt or mine for vanity address..."
-                className="glass-input w-full font-mono text-sm pr-24"
-                disabled={miningState.isRunning}
-              />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-                <button
-                  onClick={handlePasteSalt}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  id="salt"
+                  type="text"
+                  value={saltInput}
+                  onChange={(e) => setSaltInput(e.target.value)}
+                  placeholder="Enter salt or mine for vanity address..."
+                  className="glass-input w-full font-mono text-sm pr-20"
                   disabled={miningState.isRunning}
-                  className="p-2 text-white/40 hover:text-white/80 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
-                  title="Paste from clipboard"
-                >
-                  <PasteIcon className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={handleCopySalt}
-                  disabled={!saltInput}
-                  className="p-2 text-white/40 hover:text-white/80 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
-                  title="Copy to clipboard"
-                >
-                  {copyFeedback ? (
-                    <span className="text-primary text-xs">✓</span>
-                  ) : (
-                    <CopyIcon className="w-4 h-4" />
-                  )}
-                </button>
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+                  <button
+                    onClick={handlePasteSalt}
+                    disabled={miningState.isRunning}
+                    className="p-2 text-white/40 hover:text-white/80 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
+                    title="Paste from clipboard"
+                  >
+                    <PasteIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={handleCopySalt}
+                    disabled={!saltInput}
+                    className="p-2 text-white/40 hover:text-white/80 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
+                    title="Copy to clipboard"
+                  >
+                    {copyFeedback ? (
+                      <span className="text-primary text-xs">✓</span>
+                    ) : (
+                      <CopyIcon className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
+              {/* Mining Toggle Button */}
+              <button
+                onClick={miningState.isRunning ? handleStop : handleStart}
+                disabled={!status.supported}
+                className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+                  miningState.isRunning
+                    ? 'bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300'
+                    : 'bg-primary/20 hover:bg-primary/30 border border-primary/50 text-primary'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {miningState.isRunning ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Stop
+                  </span>
+                ) : (
+                  'Mine'
+                )}
+              </button>
             </div>
             <p className="text-white/40 text-xs mt-1">
               {miningState.isRunning
                 ? 'Mining for vanity address...'
                 : miningState.bestNonce !== null
                 ? `Mined result • Decimal: ${miningState.bestNonce.toString()}`
-                : 'Enter a salt or start mining to find a vanity address'}
+                : 'Enter a salt or click Mine to find a vanity address'}
             </p>
             {parsedSalt.error && (
               <p className="text-red-400 text-xs mt-1">{parsedSalt.error}</p>
@@ -608,47 +632,6 @@ export default function SafeMinerPanel() {
             </div>
           )}
 
-          {/* Control Buttons */}
-          <div className="flex gap-4">
-            <button
-              onClick={handleStart}
-              disabled={miningState.isRunning || !status.supported}
-              className="glass-button flex-1"
-            >
-              {miningState.isRunning ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      fill="none"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
-                  Mining...
-                </span>
-              ) : (
-                'Start Mining'
-              )}
-            </button>
-
-            {miningState.isRunning && (
-              <button
-                onClick={handleStop}
-                className="glass-button bg-red-500/20 hover:bg-red-500/30 border-red-500/50"
-              >
-                Stop
-              </button>
-            )}
-          </div>
         </div>
       </div>
 
@@ -695,7 +678,7 @@ export default function SafeMinerPanel() {
           bestAddress={activeResult.address}
           bestNonce={activeResult.nonce}
           initializer={activeResult.initializer}
-          defaultChainId={selectedChainId}
+          selectedChainId={selectedChainId}
         />
       )}
     </div>
