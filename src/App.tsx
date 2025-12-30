@@ -147,7 +147,7 @@ function App() {
           </h1>
           <p className="text-lg max-w-2xl mx-auto" style={{ color: 'var(--color-text-secondary)' }}>
             {mode === 'miner'
-              ? <>The World's First Browser-Native WebGPU-powered Vanity Address Miner for Safe.<wbr />{' '}
+              ? <>The World's first browser-Native WebGPU-powered Vanity Address Miner for Safe.<wbr />{' '}
                Mine locally with native GPU performance—Open Source, No Installs, and 100% Client-Side.<wbr />{' '}
                No CUDA or NVIDIA 5090 needed; works on every browser, from MacBooks to iPhones.</>
               : `Compare GPU-accelerated Keccak256 hashing performance against CPU-based Create2 address computation`}

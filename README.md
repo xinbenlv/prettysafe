@@ -6,6 +6,15 @@ The world's first **browser-native WebGPU vanity address miner** for [Safe](http
 
 No CUDA required. No NVIDIA 5090 needed. Works on every browser, from MacBooks to iPhones. ☕
 
+## 🎬 Demo
+
+<a href="https://www.loom.com/share/3c4be02acd6648d8a9eec05b303c9beb">
+  <p>Watch PrettySafe in action →</p>
+  <img style="max-width:600px;" src="https://cdn.loom.com/sessions/thumbnails/3c4be02acd6648d8a9eec05b303c9beb-with-play.gif" alt="PrettySafe Demo">
+</a>
+
+---
+
 ## ✨ Why PrettySafe?
 
 Ever looked at your Safe address and thought *"0x7a3b... meh"*?

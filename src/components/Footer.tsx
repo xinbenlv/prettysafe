@@ -36,7 +36,15 @@ export default function Footer() {
         >
           Safe.Global
         </a>
-        {' '}or the Safe Ecosystem Foundation.
+        {' '}or the <a href="https://safe.foundation" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-primary transition-colors">Safe Foundation</a>.
+        <a
+          href="https://safe.foundation"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-primary transition-colors"
+        >
+          Safe Foundation
+        </a>
       </p>
     </footer>
   );
