@@ -1,7 +1,7 @@
 export default function GithubBanner() {
   return (
     <a
-      href="https://github.com/xinbenlv/create2crunch-webgpu-gemini"
+      href="https://github.com/xinbenlv/prettysafe"
       className="github-corner fixed top-0 right-0 z-50"
       aria-label="View source on GitHub"
       target="_blank"
@@ -11,12 +11,13 @@ export default function GithubBanner() {
         width="80"
         height="80"
         viewBox="0 0 250 250"
-        className="fill-primary text-[#0a0a0a]"
         style={{
           position: 'absolute',
           top: 0,
           right: 0,
           border: 0,
+          fill: '#1CD17D',
+          color: '#0a0a0a',
         }}
         aria-hidden="true"
       >

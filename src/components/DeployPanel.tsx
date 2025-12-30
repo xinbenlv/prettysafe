@@ -170,20 +170,20 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
   const selectedNetworkConfig = getNetworkConfig(selectedChainId);
 
   return (
-    <div className="glass-card p-6 border-primary/30">
-      <h3 className="text-lg font-semibold mb-4 text-white/90">Deploy Safe</h3>
+    <div className="card border-primary/30">
+      <h3 className="text-lg font-semibold mb-4 text-primary-themed">Deploy Safe</h3>
 
       <div className="space-y-4">
         {/* Wallet Connection */}
         {!walletAvailable ? (
-          <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-4 text-yellow-200 text-sm">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-sm">
             No Ethereum wallet detected. Please install MetaMask or another wallet to deploy.
           </div>
         ) : !walletState.connected ? (
           <button
             onClick={handleConnect}
             disabled={deployStatus === 'connecting'}
-            className="glass-button w-full"
+            className="btn-secondary w-full"
           >
             {deployStatus === 'connecting' ? (
               <span className="flex items-center justify-center gap-2">
@@ -198,18 +198,18 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
             )}
           </button>
         ) : (
-          <div className="bg-white/5 rounded-lg p-4">
+          <div className="bg-surface-mint rounded-xl p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Connected Wallet</p>
-                <p className="font-mono text-sm text-white/80">
+                <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Connected Wallet</p>
+                <p className="font-mono text-sm text-primary-themed">
                   {walletState.address?.slice(0, 6)}...{walletState.address?.slice(-4)}
                 </p>
               </div>
               <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                 isCorrectNetwork
                   ? 'bg-primary/20 text-primary'
-                  : 'bg-yellow-500/20 text-yellow-300'
+                  : 'bg-amber-100 text-amber-700'
               }`}>
                 {currentNetworkConfig?.name || `Chain ${walletState.chainId}`}
               </div>
@@ -219,14 +219,14 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
 
         {/* Network Warning */}
         {walletState.connected && !isCorrectNetwork && (
-          <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-4">
-            <p className="text-yellow-200 text-sm mb-2">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <p className="text-amber-800 text-sm mb-2">
               Please switch to {selectedNetworkConfig?.name || 'the selected network'} to deploy.
             </p>
             <button
               onClick={handleSwitchNetwork}
               disabled={deployStatus === 'switching'}
-              className="text-yellow-300 text-sm underline hover:text-yellow-100"
+              className="text-amber-700 text-sm underline hover:text-amber-900"
             >
               {deployStatus === 'switching' ? 'Switching...' : `Switch to ${selectedNetworkConfig?.name}`}
             </button>
@@ -238,7 +238,7 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
           <button
             onClick={handleDeploy}
             disabled={!canDeploy}
-            className="glass-button w-full bg-primary/20 hover:bg-primary/30 border-primary/50"
+            className="btn-primary w-full"
           >
             {deployStatus === 'deploying' ? (
               <span className="flex items-center justify-center gap-2">
@@ -264,21 +264,21 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-300 text-sm">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-600 text-sm">
             {error}
           </div>
         )}
 
         {/* Transaction Info */}
         {txHash && (
-          <div className="bg-white/5 rounded-lg p-4 space-y-3">
+          <div className="bg-surface-mint rounded-xl p-4 space-y-3">
             <div>
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Transaction Hash</p>
+              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Transaction Hash</p>
               <a
                 href={getExplorerTxLink(txHash, selectedChainId)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-sm text-primary hover:text-primary-300 underline break-all"
+                className="font-mono text-sm text-primary hover:text-primary-600 underline break-all"
               >
                 {txHash}
               </a>
@@ -288,8 +288,8 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
 
         {/* Success State */}
         {deployStatus === 'success' && deployedAddress && (
-          <div className="bg-primary/20 border border-primary/50 rounded-lg p-4 space-y-4">
-            <div className="flex items-center gap-2 text-primary">
+          <div className="bg-secondary/10 border-2 border-secondary rounded-2xl p-4 space-y-4 shadow-pink-glow">
+            <div className="flex items-center gap-2 text-secondary-dark">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
@@ -297,8 +297,8 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
             </div>
 
             <div>
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-2">Safe Address</p>
-              <p className="font-mono text-sm text-white/90 break-all">{deployedAddress}</p>
+              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-2">Safe Address</p>
+              <p className="font-mono text-sm text-primary-themed break-all">{deployedAddress}</p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -306,7 +306,7 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
                 href={getExplorerTxLink(txHash!, selectedChainId)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="glass-button text-center flex-1"
+                className="btn-secondary text-center flex-1"
               >
                 View on Explorer
               </a>
@@ -314,7 +314,7 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
                 href={getSafeAppLink(deployedAddress, selectedChainId)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="glass-button text-center flex-1 bg-primary/20 hover:bg-primary/30 border-primary/50"
+                className="btn-primary text-center flex-1"
               >
                 Open in Safe App
               </a>

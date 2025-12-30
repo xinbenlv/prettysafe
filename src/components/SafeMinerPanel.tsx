@@ -345,19 +345,19 @@ export default function SafeMinerPanel() {
         <button
           onClick={handleConnectWallet}
           disabled={isConnecting}
-          className="w-full glass-card p-6 border-2 border-primary/50 hover:border-primary hover:bg-primary/10 transition-all cursor-pointer group"
+          className="w-full card p-6 border-2 border-primary/30 hover:border-primary hover:shadow-glow transition-all cursor-pointer group"
         >
           <div className="flex items-center justify-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center group-hover:bg-primary/30 transition-colors">
+            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
               <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
             <div className="text-left">
-              <p className="text-xl font-semibold text-white group-hover:text-primary transition-colors">
+              <p className="text-xl font-semibold text-primary-themed group-hover:text-primary transition-colors">
                 {isConnecting ? 'Connecting...' : 'Connect Wallet'}
               </p>
-              <p className="text-white/50 text-sm">
+              <p className="text-secondary-themed text-sm">
                 Connect to auto-fill your address as Safe owner
               </p>
             </div>
@@ -373,7 +373,7 @@ export default function SafeMinerPanel() {
 
       {/* Connected Wallet Info */}
       {walletState.connected && walletState.address && (
-        <div className="glass-card p-4 border border-primary/30">
+        <div className="card p-4 border border-primary/30 bg-primary/5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
@@ -382,8 +382,8 @@ export default function SafeMinerPanel() {
                 </svg>
               </div>
               <div>
-                <p className="text-white/50 text-xs uppercase tracking-wider">Connected Wallet</p>
-                <p className="font-mono text-sm text-white/90">
+                <p className="text-secondary-themed text-xs uppercase tracking-wider">Connected Wallet</p>
+                <p className="font-mono text-sm text-primary-themed">
                   {walletState.address.slice(0, 6)}...{walletState.address.slice(-4)}
                 </p>
               </div>
@@ -397,47 +397,44 @@ export default function SafeMinerPanel() {
 
       {/* No Wallet Available Warning */}
       {!walletAvailable && (
-        <div className="glass-card p-4 border border-yellow-500/30 bg-yellow-500/10">
+        <div className="card p-4 border-amber-500/50" style={{ backgroundColor: 'rgba(251, 191, 36, 0.1)', borderColor: 'rgba(251, 191, 36, 0.3)' }}>
           <div className="flex items-center gap-3">
-            <svg className="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             <div>
-              <p className="text-yellow-200 font-medium">No Wallet Detected</p>
-              <p className="text-yellow-200/70 text-sm">Install MetaMask or another Ethereum wallet to deploy</p>
+              <p className="text-amber-500 font-medium">No Wallet Detected</p>
+              <p className="text-amber-500/80 text-sm">Install MetaMask or another Ethereum wallet to deploy</p>
             </div>
           </div>
         </div>
       )}
 
       {/* GPU Status */}
-      <div className="glass-card p-4">
+      <div className="card p-4">
         <div className="flex items-center gap-3">
           <div
             className={`w-3 h-3 rounded-full ${
               status.supported ? 'bg-primary animate-pulse' : 'bg-red-500'
             }`}
           />
-          <span className="text-white/80">
+          <span className="text-primary-themed">
             {status.supported ? '✅ WebGPU Ready' : '❌ WebGPU Not Available'}
           </span>
         </div>
-        {status.gpuName && (
-          <p className="text-white/50 text-sm mt-2 ml-6">GPU: {status.gpuName}</p>
-        )}
-        {status.error && (
-          <p className="text-red-400 text-sm mt-2 ml-6">{status.error}</p>
+        {status.vendor && (
+          <p className="text-secondary-themed text-sm mt-2 ml-6">GPU: {status.vendor}</p>
         )}
       </div>
 
       {/* Configuration */}
-      <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold mb-4 text-white/90">Safe Configuration</h3>
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-4 text-primary-themed">Safe Configuration</h3>
 
         <div className="space-y-4">
           {/* Owners */}
           <div>
-            <label htmlFor="owners" className="block text-white/80 font-medium mb-2">
+            <label htmlFor="owners" className="block text-primary-themed font-medium mb-2">
               Owner Addresses
             </label>
             <textarea
@@ -445,15 +442,15 @@ export default function SafeMinerPanel() {
               value={ownersText}
               onChange={(e) => setOwnersText(e.target.value)}
               placeholder="Enter owner addresses (one per line or comma-separated)&#10;0x1234...&#10;0x5678..."
-              className="glass-input w-full h-32 resize-none font-mono text-sm"
+              className="input w-full h-32 resize-none font-mono text-sm"
               disabled={miningState.isRunning}
             />
-            <p className="text-white/40 text-xs mt-1">{owners.length} address{owners.length !== 1 ? 'es' : ''} entered</p>
+            <p className="text-secondary-themed text-xs mt-1">{owners.length} address{owners.length !== 1 ? 'es' : ''} entered</p>
           </div>
 
           {/* Threshold */}
           <div className="flex items-center gap-4">
-            <label htmlFor="threshold" className="text-white/80 font-medium">
+            <label htmlFor="threshold" className="text-primary-themed font-medium">
               Threshold:
             </label>
             <input
@@ -463,17 +460,17 @@ export default function SafeMinerPanel() {
               max={Math.max(1, owners.length)}
               value={threshold}
               onChange={(e) => setThreshold(Math.max(1, parseInt(e.target.value) || 1))}
-              className="glass-input w-20 text-center"
+              className="input w-20 text-center"
               disabled={miningState.isRunning}
             />
-            <span className="text-white/50 text-sm">
+            <span className="text-secondary-themed text-sm">
               of {Math.max(1, owners.length)} owner{owners.length !== 1 ? 's' : ''}
             </span>
           </div>
 
           {/* Network Selection with Logos */}
           <div>
-            <label className="block text-white/80 font-medium mb-2">
+            <label className="block text-primary-themed font-medium mb-2">
               Deploy Network
             </label>
             <div className="flex flex-wrap gap-2">
@@ -483,10 +480,10 @@ export default function SafeMinerPanel() {
                   type="button"
                   onClick={() => setSelectedChainId(network.chainId)}
                   disabled={miningState.isRunning}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-lg border transition-all ${
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all ${
                     selectedChainId === network.chainId
-                      ? 'bg-primary/20 border-primary/50 text-white'
-                      : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+                      ? 'bg-primary/10 border-primary text-primary-themed'
+                      : 'bg-button-inactive border-surface text-secondary-themed hover:border-primary/50'
                   } ${miningState.isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <NetworkLogo chainId={network.chainId} className="w-5 h-5" />
@@ -498,35 +495,35 @@ export default function SafeMinerPanel() {
                   key={network.chainId}
                   type="button"
                   disabled
-                  className="flex items-center gap-2 px-4 py-3 rounded-lg border bg-white/5 border-white/10 text-white/30 cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-3 rounded-xl border bg-button-inactive border-surface text-secondary-themed opacity-50 cursor-not-allowed"
                   title="Coming Soon"
                 >
-                  <div className="w-5 h-5 bg-gray-600 rounded-full" />
+                  <div className="w-5 h-5 bg-surface-inner rounded-full" style={{ backgroundColor: 'var(--color-surface-border)' }} />
                   <span>{network.name}</span>
                   <span className="text-xs">(Soon)</span>
                 </button>
               ))}
             </div>
-            <p className="text-white/40 text-xs mt-2">
+            <p className="text-secondary-themed text-xs mt-2">
               Same address can be deployed on both Ethereum and Base
             </p>
           </div>
 
           {/* Contract Info - Deployer & Init Code Hash */}
-          <div className="bg-white/5 rounded-lg p-4 space-y-3">
+          <div className="bg-surface-inner rounded-xl p-4 space-y-3 border border-surface">
             <div>
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Proxy Factory (Deployer)</p>
-              <p className="font-mono text-xs text-white/70 break-all">{PROXY_FACTORY}</p>
+              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Proxy Factory (Deployer)</p>
+              <p className="font-mono text-xs text-primary-themed break-all">{PROXY_FACTORY}</p>
             </div>
             <div>
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Init Code Hash</p>
-              <p className="font-mono text-xs text-white/70 break-all">{PROXY_CREATION_CODE_HASH}</p>
+              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Init Code Hash</p>
+              <p className="font-mono text-xs text-primary-themed break-all">{PROXY_CREATION_CODE_HASH}</p>
             </div>
           </div>
 
           {/* Unified Salt Input with Mining Button */}
-          <div className="border-t border-white/10 pt-4 mt-4">
-            <label htmlFor="salt" className="block text-white/80 font-medium mb-2">
+          <div className="border-t border-surface pt-4 mt-4">
+            <label htmlFor="salt" className="block text-primary-themed font-medium mb-2">
               Salt {miningState.bestNonce !== null ? '(Mined)' : '(Custom)'}
             </label>
             <div className="flex gap-2">
@@ -537,14 +534,14 @@ export default function SafeMinerPanel() {
                   value={saltInput}
                   onChange={(e) => setSaltInput(e.target.value)}
                   placeholder="Enter salt or mine for vanity address..."
-                  className="glass-input w-full font-mono text-sm pr-20"
+                  className="input w-full font-mono text-sm pr-20"
                   disabled={miningState.isRunning}
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
                   <button
                     onClick={handlePasteSalt}
                     disabled={miningState.isRunning}
-                    className="p-2 text-white/40 hover:text-white/80 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
+                    className="p-2 text-secondary-themed hover:text-primary hover:bg-primary/10 rounded transition-colors disabled:opacity-50"
                     title="Paste from clipboard"
                   >
                     <PasteIcon className="w-4 h-4" />
@@ -552,7 +549,7 @@ export default function SafeMinerPanel() {
                   <button
                     onClick={handleCopySalt}
                     disabled={!saltInput}
-                    className="p-2 text-white/40 hover:text-white/80 hover:bg-white/10 rounded transition-colors disabled:opacity-50"
+                    className="p-2 text-secondary-themed hover:text-primary hover:bg-primary/10 rounded transition-colors disabled:opacity-50"
                     title="Copy to clipboard"
                   >
                     {copyFeedback ? (
@@ -567,10 +564,10 @@ export default function SafeMinerPanel() {
               <button
                 onClick={miningState.isRunning ? handleStop : handleStart}
                 disabled={!status.supported}
-                className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+                className={`px-6 py-2 rounded-full font-medium transition-all whitespace-nowrap ${
                   miningState.isRunning
-                    ? 'bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300'
-                    : 'bg-primary/20 hover:bg-primary/30 border border-primary/50 text-primary'
+                    ? 'bg-red-500 hover:bg-red-600 text-white'
+                    : 'bg-primary hover:shadow-glow-lg text-white shadow-glow'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {miningState.isRunning ? (
@@ -586,7 +583,7 @@ export default function SafeMinerPanel() {
                 )}
               </button>
             </div>
-            <p className="text-white/40 text-xs mt-1">
+            <p className="text-secondary-themed text-xs mt-1">
               {miningState.isRunning
                 ? 'Mining for vanity address...'
                 : miningState.bestNonce !== null
@@ -594,25 +591,36 @@ export default function SafeMinerPanel() {
                 : 'Enter a salt or click Mine to find a vanity address'}
             </p>
             {parsedSalt.error && (
-              <p className="text-red-400 text-xs mt-1">{parsedSalt.error}</p>
+              <p className="text-red-500 text-xs mt-1">{parsedSalt.error}</p>
             )}
           </div>
 
-          {/* Computed Address Display */}
+          {/* Computed Address Display - Highlighted with pink when found */}
           {activeResult && (
-            <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-2">
-                {activeResult.source === 'mined' ? 'Mined Address' : 'Computed Address'}
-              </p>
+            <div className={`rounded-2xl p-4 border-2 transition-all ${
+              activeResult.source === 'mined'
+                ? 'border-secondary bg-secondary/10 shadow-pink-glow'
+                : 'border-primary/30 bg-primary/5'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-secondary-themed text-xs uppercase tracking-wider">
+                  {activeResult.source === 'mined' ? 'Mined Address' : 'Computed Address'}
+                </p>
+                {activeResult.source === 'mined' && (
+                  <span className="px-2 py-1 rounded-full bg-secondary text-white text-xs font-medium">
+                    ✨ Vanity Found!
+                  </span>
+                )}
+              </div>
               <div className="font-mono text-lg break-all">
-                <span className="text-primary">
+                <span className="text-primary font-bold">
                   {activeResult.address.slice(0, 2 + countLeadingZeros(activeResult.address))}
                 </span>
-                <span className="text-white/80">
+                <span className="text-primary-themed">
                   {activeResult.address.slice(2 + countLeadingZeros(activeResult.address))}
                 </span>
               </div>
-              <p className="text-white/40 text-xs mt-2">
+              <p className="text-secondary-themed text-xs mt-2">
                 {countLeadingZeros(activeResult.address)} leading zeros
               </p>
             </div>
@@ -620,14 +628,14 @@ export default function SafeMinerPanel() {
 
           {/* Validation Error */}
           {validationError && (
-            <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-300 text-sm">
+            <div className="rounded-xl p-3 text-sm" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)', border: '1px solid', color: '#ef4444' }}>
               {validationError}
             </div>
           )}
 
           {/* Mining Error */}
           {miningState.error && (
-            <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-300 text-sm">
+            <div className="rounded-xl p-3 text-sm" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)', border: '1px solid', color: '#ef4444' }}>
               {miningState.error}
             </div>
           )}
@@ -637,34 +645,34 @@ export default function SafeMinerPanel() {
 
       {/* Mining Statistics */}
       {(miningState.isRunning || miningState.totalHashes > 0) && (
-        <div className="glass-card p-6">
-          <h3 className="text-lg font-semibold mb-4 text-white/90">Mining Progress</h3>
+        <div className="card">
+          <h3 className="text-lg font-semibold mb-4 text-primary-themed">Mining Progress</h3>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white/5 rounded-lg p-4">
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Hashrate</p>
+            <div className="bg-surface-inner rounded-2xl p-4 border border-surface">
+              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Hashrate</p>
               <p className="text-xl font-bold text-primary">
                 {formatHashrate(miningState.hashrate)}
               </p>
             </div>
 
-            <div className="bg-white/5 rounded-lg p-4">
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Total Hashes</p>
-              <p className="text-xl font-bold text-white">
+            <div className="bg-surface-inner rounded-2xl p-4 border border-surface">
+              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Total Hashes</p>
+              <p className="text-xl font-bold text-primary-themed">
                 {formatNumber(miningState.totalHashes)}
               </p>
             </div>
 
-            <div className="bg-white/5 rounded-lg p-4">
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Elapsed Time</p>
-              <p className="text-xl font-bold text-white">
+            <div className="bg-surface-inner rounded-2xl p-4 border border-surface">
+              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Elapsed Time</p>
+              <p className="text-xl font-bold text-primary-themed">
                 {formatTime(miningState.elapsedTime)}
               </p>
             </div>
 
-            <div className="bg-white/5 rounded-lg p-4">
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Status</p>
-              <p className={`text-xl font-bold ${miningState.isRunning ? 'text-primary' : 'text-white/50'}`}>
+            <div className="bg-surface-inner rounded-2xl p-4 border border-surface">
+              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Status</p>
+              <p className={`text-xl font-bold ${miningState.isRunning ? 'text-primary' : 'text-secondary-themed'}`}>
                 {miningState.isRunning ? 'Running' : 'Stopped'}
               </p>
             </div>

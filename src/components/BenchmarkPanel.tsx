@@ -33,29 +33,29 @@ export default function BenchmarkPanel({
   return (
     <div className="space-y-6">
       {/* Status Card */}
-      <div className="glass-card p-6">
+      <div className="card">
         <div className="flex items-center gap-3">
           <div
             className={`w-3 h-3 rounded-full ${
               webGPUStatus.supported ? 'bg-primary animate-pulse' : 'bg-red-500'
             }`}
           />
-          <span className={webGPUStatus.supported ? 'text-primary' : 'text-red-400'}>
+          <span className={webGPUStatus.supported ? 'text-primary font-medium' : 'text-red-500 font-medium'}>
             {webGPUStatus.message}
           </span>
         </div>
         {webGPUStatus.vendor && (
-          <p className="text-white/50 text-sm mt-2 ml-6">
+          <p className="text-secondary-themed text-sm mt-2 ml-6">
             GPU: {webGPUStatus.vendor}
           </p>
         )}
       </div>
 
       {/* Controls */}
-      <div className="glass-card p-6">
+      <div className="card">
         <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center gap-3">
-            <label htmlFor="duration" className="text-white/80 font-medium">
+            <label htmlFor="duration" className="text-primary-themed font-medium">
               Duration (seconds):
             </label>
             <input
@@ -66,7 +66,7 @@ export default function BenchmarkPanel({
               step={0.1}
               value={duration}
               onChange={(e) => setDuration(Math.max(0.1, Math.min(60, parseFloat(e.target.value) || 0.5)))}
-              className="glass-input w-24 text-center"
+              className="input w-24 text-center"
               disabled={isRunning}
             />
           </div>
@@ -74,7 +74,7 @@ export default function BenchmarkPanel({
           <button
             onClick={onStart}
             disabled={isRunning || !webGPUStatus.supported}
-            className="glass-button"
+            className="btn-primary"
           >
             {isRunning ? (
               <span className="flex items-center gap-2">
@@ -104,14 +104,14 @@ export default function BenchmarkPanel({
       </div>
 
       {/* Logs */}
-      <div className="glass-card p-6">
-        <h3 className="text-lg font-semibold mb-4 text-white/90">Benchmark Logs</h3>
-        <div className="logs-panel bg-black/30 rounded-lg p-4 font-mono text-sm">
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-4 text-primary-themed">Benchmark Logs</h3>
+        <div className="logs-panel bg-surface-mint rounded-xl p-4 font-mono text-sm">
           {logs.length === 0 ? (
-            <span className="text-white/40 italic">Benchmark logs will appear here...</span>
+            <span className="text-secondary-themed/60 italic">Benchmark logs will appear here...</span>
           ) : (
             logs.map((log, i) => (
-              <div key={i} className="text-white/80">
+              <div key={i} className="text-primary-themed">
                 {log}
               </div>
             ))

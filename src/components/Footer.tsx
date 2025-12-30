@@ -1,15 +1,15 @@
 export default function Footer() {
   return (
-    <footer className="py-8 text-center">
-      <p className="text-white/50">
+    <footer className="py-8 text-center glass-card border-0 border-t rounded-none">
+      <p style={{ color: 'var(--color-text-secondary)' }}>
         Built w/ ❤️ by{' '}
         <a
-          href="https://zzn.im"
+          href="https://prettysafe.xyz"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-primary hover:text-primary-300 transition-colors underline underline-offset-2"
+          className="text-primary hover:text-primary-600 transition-colors underline underline-offset-2"
         >
-          Zainan Victor Zhou
+          Project PrettySafe
         </a>
       </p>
     </footer>
