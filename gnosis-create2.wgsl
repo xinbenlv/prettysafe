@@ -202,7 +202,26 @@ fn keccak256_64(input: array<u32, 16>) -> array<u32, 8> {
 
 // Keccak256 for 85-byte input (0xff + factory + salt + codeHash)
 // Returns the last 20 bytes as 5 u32s (address)
-fn keccak256_85_address(prefix_factory: array<u32, 6>, salt: array<u32, 8>, code_hash: array<u32, 8>) -> array<u32, 5> {
+//
+// Input layout (85 bytes):
+//   byte 0: 0xff
+//   bytes 1-20: factory (20 bytes)
+//   bytes 21-52: gnosisSalt (32 bytes)
+//   bytes 53-84: proxyCodeHash (32 bytes)
+//
+// Keccak state mapping (8 bytes per u64):
+//   state[0]: bytes 0-7   = 0xff + factory[0..6]
+//   state[1]: bytes 8-15  = factory[7..14]
+//   state[2]: bytes 16-23 = factory[15..19] + salt[0..2]
+//   state[3]: bytes 24-31 = salt[3..10]
+//   state[4]: bytes 32-39 = salt[11..18]
+//   state[5]: bytes 40-47 = salt[19..26]
+//   state[6]: bytes 48-55 = salt[27..31] + codeHash[0..2]
+//   state[7]: bytes 56-63 = codeHash[3..10]
+//   state[8]: bytes 64-71 = codeHash[11..18]
+//   state[9]: bytes 72-79 = codeHash[19..26]
+//   state[10]: bytes 80-87 = codeHash[27..31] + padding
+fn keccak256_85_address(factory: array<u32, 5>, salt: array<u32, 8>, code_hash: array<u32, 8>) -> array<u32, 5> {
     var state: array<u64, 25>;
 
     // Initialize state to zero
@@ -210,59 +229,84 @@ fn keccak256_85_address(prefix_factory: array<u32, 6>, salt: array<u32, 8>, code
         state[i] = make_u64(0u, 0u);
     }
 
-    // Layout: 0xff (1) + factory (20) + salt (32) + codeHash (32) = 85 bytes
-    // Bytes 0-20: 0xff + factory (21 bytes)
-    // prefix_factory contains: [0xff + factory[0:3]] [factory[3:7]] [factory[7:11]] [factory[11:15]] [factory[15:19]] [factory[19:20] + padding]
+    // Helper: extract bytes from u32 (little-endian memory layout)
+    // u32 in memory: [byte0, byte1, byte2, byte3] where byte0 = u32 & 0xFF
 
-    // We need to carefully pack 85 bytes into keccak state
-    // state[0] = bytes 0-7
-    // state[1] = bytes 8-15
-    // ...
-    // state[10] = bytes 80-84 + padding
-
-    // For simplicity, let's build a byte array approach
-    // Input is: 0xff | factory[20] | salt[32] | codeHash[32] = 85 bytes
-
-    // Absorb the data as u64s (little endian)
-    // prefix_factory[0] = 0xff | factory[0..3] (4 bytes total, 0xff in low byte)
-    state[0] = make_u64(prefix_factory[0], prefix_factory[1]);
-    state[1] = make_u64(prefix_factory[2], prefix_factory[3]);
-    state[2] = make_u64(prefix_factory[4], prefix_factory[5]);
-
-    // At this point we've consumed 24 bytes but we have 21 (0xff + 20 factory)
-    // So prefix_factory layout should be:
-    // [0]: bytes 0-3: 0xff, factory[0], factory[1], factory[2]
-    // [1]: bytes 4-7: factory[3..6]
-    // [2]: bytes 8-11: factory[7..10]
-    // [3]: bytes 12-15: factory[11..14]
-    // [4]: bytes 16-19: factory[15..18]
-    // [5]: bytes 20-23: factory[19], salt[0], salt[1], salt[2]
-
-    // Actually let's reconsider. The 85 bytes are:
+    // state[0]: bytes 0-7 = 0xff + factory[0..6]
     // byte 0: 0xff
-    // bytes 1-20: factory (20 bytes)
-    // bytes 21-52: salt (32 bytes)
-    // bytes 53-84: codeHash (32 bytes)
+    // bytes 1-4: factory[0] (4 bytes)
+    // bytes 5-7: factory[1] low 3 bytes
+    let s0_low = 0xFFu | (factory[0] << 8u);
+    let s0_high = (factory[0] >> 24u) | (factory[1] << 8u);
+    state[0] = make_u64(s0_low, s0_high);
 
-    // Pack into state (little-endian u64s):
-    // state[0]: bytes 0-7
-    // state[1]: bytes 8-15
-    // state[2]: bytes 16-23
-    // ...
+    // state[1]: bytes 8-15 = factory[7..14]
+    // bytes 8-11: factory[1] high byte + factory[2] low 3 bytes
+    // bytes 12-15: factory[2] high byte + factory[3] low 3 bytes
+    let s1_low = (factory[1] >> 24u) | (factory[2] << 8u);
+    let s1_high = (factory[2] >> 24u) | (factory[3] << 8u);
+    state[1] = make_u64(s1_low, s1_high);
 
-    // We'll receive pre-packed data from the host
-    state[2] = xor_u64(state[2], make_u64(salt[0], salt[1]));
-    state[3] = make_u64(salt[2], salt[3]);
-    state[4] = make_u64(salt[4], salt[5]);
-    state[5] = make_u64(salt[6], salt[7]);
-    state[6] = make_u64(code_hash[0], code_hash[1]);
-    state[7] = make_u64(code_hash[2], code_hash[3]);
-    state[8] = make_u64(code_hash[4], code_hash[5]);
-    state[9] = make_u64(code_hash[6], code_hash[7]);
+    // state[2]: bytes 16-23 = factory[15..19] + salt[0..2]
+    // bytes 16-19: factory[3] high byte + factory[4] low 3 bytes
+    // bytes 20: factory[4] high byte (= factory byte 19, the last one)
+    // bytes 21-23: salt[0..2] (salt low 3 bytes)
+    let s2_low = (factory[3] >> 24u) | (factory[4] << 8u);
+    let s2_high = (factory[4] >> 24u) | (salt[0] << 8u);
+    state[2] = make_u64(s2_low, s2_high);
 
-    // Padding: 0x01 at byte 85, 0x80 at byte 135
-    state[10] = xor_u64(state[10], make_u64(0x01u << 16u, 0u)); // byte 85 is in state[10] low word
-    state[16] = xor_u64(state[16], make_u64(0u, 0x80000000u));
+    // state[3]: bytes 24-31 = salt[3..10]
+    // bytes 24-27: salt[0] high byte + salt[1] low 3 bytes
+    // bytes 28-31: salt[1] high byte + salt[2] low 3 bytes
+    let s3_low = (salt[0] >> 24u) | (salt[1] << 8u);
+    let s3_high = (salt[1] >> 24u) | (salt[2] << 8u);
+    state[3] = make_u64(s3_low, s3_high);
+
+    // state[4]: bytes 32-39 = salt[11..18]
+    let s4_low = (salt[2] >> 24u) | (salt[3] << 8u);
+    let s4_high = (salt[3] >> 24u) | (salt[4] << 8u);
+    state[4] = make_u64(s4_low, s4_high);
+
+    // state[5]: bytes 40-47 = salt[19..26]
+    let s5_low = (salt[4] >> 24u) | (salt[5] << 8u);
+    let s5_high = (salt[5] >> 24u) | (salt[6] << 8u);
+    state[5] = make_u64(s5_low, s5_high);
+
+    // state[6]: bytes 48-55 = salt[27..31] + codeHash[0..2]
+    // bytes 48-51: salt[6] high byte + salt[7] low 3 bytes
+    // bytes 52: salt[7] high byte (= salt byte 31, the last one)
+    // bytes 53-55: codeHash[0..2]
+    let s6_low = (salt[6] >> 24u) | (salt[7] << 8u);
+    let s6_high = (salt[7] >> 24u) | (code_hash[0] << 8u);
+    state[6] = make_u64(s6_low, s6_high);
+
+    // state[7]: bytes 56-63 = codeHash[3..10]
+    let s7_low = (code_hash[0] >> 24u) | (code_hash[1] << 8u);
+    let s7_high = (code_hash[1] >> 24u) | (code_hash[2] << 8u);
+    state[7] = make_u64(s7_low, s7_high);
+
+    // state[8]: bytes 64-71 = codeHash[11..18]
+    let s8_low = (code_hash[2] >> 24u) | (code_hash[3] << 8u);
+    let s8_high = (code_hash[3] >> 24u) | (code_hash[4] << 8u);
+    state[8] = make_u64(s8_low, s8_high);
+
+    // state[9]: bytes 72-79 = codeHash[19..26]
+    let s9_low = (code_hash[4] >> 24u) | (code_hash[5] << 8u);
+    let s9_high = (code_hash[5] >> 24u) | (code_hash[6] << 8u);
+    state[9] = make_u64(s9_low, s9_high);
+
+    // state[10]: bytes 80-87 = codeHash[27..31] + padding
+    // bytes 80-83: codeHash[6] high byte + codeHash[7] low 3 bytes
+    // byte 84: codeHash[7] high byte (= codeHash byte 31, the last one)
+    // byte 85: 0x01 (keccak padding start)
+    // bytes 86-87: 0x00
+    let s10_low = (code_hash[6] >> 24u) | (code_hash[7] << 8u);
+    let s10_high = (code_hash[7] >> 24u) | (0x01u << 8u); // padding 0x01 at byte 85
+    state[10] = make_u64(s10_low, s10_high);
+
+    // Keccak padding: 0x80 at byte 135 (rate-1 for keccak256 with 136-byte rate)
+    // byte 135 = state[16].y bit 24-31
+    state[16] = make_u64(0u, 0x80000000u);
 
     keccakf(&state);
 
@@ -330,29 +374,31 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Pack saltNonce (as 256-bit big-endian number)
     // For simplicity, we use nonce_low and nonce_high as the nonce
     // Pad to 32 bytes (256 bits)
+    // IMPORTANT: Swap endianness to match CPU's big-endian byte order
     salt_input[8] = 0u;
     salt_input[9] = 0u;
     salt_input[10] = 0u;
     salt_input[11] = 0u;
     salt_input[12] = 0u;
     salt_input[13] = 0u;
-    salt_input[14] = nonce_high;
-    salt_input[15] = nonce_low;
+    salt_input[14] = swap_endian(nonce_high);
+    salt_input[15] = swap_endian(nonce_low);
 
     let gnosis_salt = keccak256_64(salt_input);
 
     // Step 2: Compute address = keccak256(0xff ++ factory ++ gnosisSalt ++ proxyCodeHash)[12:]
-    // Build prefix: 0xff + factory (21 bytes) packed into 6 u32s
-    var prefix_factory: array<u32, 6>;
-    // byte 0: 0xff, bytes 1-4: factory[0..3]
-    prefix_factory[0] = 0xFFu | (constants.factory[0] << 8u);
-    prefix_factory[1] = (constants.factory[0] >> 24u) | (constants.factory[1] << 8u);
-    prefix_factory[2] = (constants.factory[1] >> 24u) | (constants.factory[2] << 8u);
-    prefix_factory[3] = (constants.factory[2] >> 24u) | (constants.factory[3] << 8u);
-    prefix_factory[4] = (constants.factory[3] >> 24u) | (constants.factory[4] << 8u);
-    prefix_factory[5] = constants.factory[4] >> 24u; // only 1 byte used
+    // Pass factory as 5 u32s, the keccak function handles the 0xff prefix internally
+    var factory: array<u32, 5>;
+    for (var i = 0u; i < 5u; i++) {
+        factory[i] = constants.factory[i];
+    }
 
-    let address = keccak256_85_address(prefix_factory, gnosis_salt, constants.proxy_code_hash);
+    var proxy_code_hash: array<u32, 8>;
+    for (var i = 0u; i < 8u; i++) {
+        proxy_code_hash[i] = constants.proxy_code_hash[i];
+    }
+
+    let address = keccak256_85_address(factory, gnosis_salt, proxy_code_hash);
 
     // Step 3: Check if this address is smaller than the current best
     let current_best0 = atomicLoad(&best.addr0);

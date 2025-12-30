@@ -6,9 +6,11 @@ import {
   deployProxy,
   waitForTransaction,
   isWalletAvailable,
-  getEtherscanTxLink,
+  getExplorerTxLink,
   getSafeAppLink,
-  switchToMainnet,
+  switchToChain,
+  getNetworkConfig,
+  isSupportedNetwork,
   type WalletState,
 } from '../lib/wallet';
 
@@ -16,21 +18,24 @@ interface DeployPanelProps {
   bestAddress: Address;
   bestNonce: bigint;
   initializer: Hex;
+  defaultChainId?: number;
 }
 
-type DeployStatus = 'idle' | 'connecting' | 'deploying' | 'confirming' | 'success' | 'error';
+type DeployStatus = 'idle' | 'connecting' | 'switching' | 'deploying' | 'confirming' | 'success' | 'error';
 
-export default function DeployPanel({ bestAddress, bestNonce, initializer }: DeployPanelProps) {
+export default function DeployPanel({ bestAddress, bestNonce, initializer, defaultChainId = 1 }: DeployPanelProps) {
   const [walletState, setWalletState] = useState<WalletState>({
     connected: false,
     address: null,
     chainId: null,
     error: null,
   });
+  const [selectedChainId, setSelectedChainId] = useState<number>(defaultChainId);
   const [deployStatus, setDeployStatus] = useState<DeployStatus>('idle');
   const [txHash, setTxHash] = useState<Hex | null>(null);
   const [deployedAddress, setDeployedAddress] = useState<Address | null>(null);
   const [error, setError] = useState<string | null>(null);
+
 
   // Check wallet state on mount
   useEffect(() => {
@@ -40,24 +45,29 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer }: Dep
   const checkWallet = async () => {
     const state = await getWalletState();
     setWalletState(state);
+    // If connected and on a supported network, update selected chain
+    if (state.connected && state.chainId && isSupportedNetwork(state.chainId)) {
+      setSelectedChainId(state.chainId);
+    }
   };
 
   const handleConnect = useCallback(async () => {
     setDeployStatus('connecting');
     setError(null);
 
-    const state = await connectWallet();
+    const state = await connectWallet(selectedChainId);
     setWalletState(state);
 
     if (state.error) {
       setError(state.error);
       setDeployStatus('error');
     } else if (state.connected) {
-      // Check if on mainnet
-      if (state.chainId !== 1) {
-        const switched = await switchToMainnet();
+      // Check if on selected network
+      if (state.chainId !== selectedChainId) {
+        setDeployStatus('switching');
+        const switched = await switchToChain(selectedChainId);
         if (!switched) {
-          setError('Please switch to Ethereum Mainnet');
+          setError(`Please switch to ${getNetworkConfig(selectedChainId)?.name || 'the selected network'}`);
           setDeployStatus('error');
           return;
         }
@@ -66,16 +76,41 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer }: Dep
       }
       setDeployStatus('idle');
     }
-  }, []);
+  }, [selectedChainId]);
+
+  const handleNetworkChange = useCallback(async (chainId: number) => {
+    setSelectedChainId(chainId);
+    setError(null);
+
+    // If already connected, try to switch network
+    if (walletState.connected && walletState.chainId !== chainId) {
+      setDeployStatus('switching');
+      const switched = await switchToChain(chainId);
+      if (!switched) {
+        setError(`Failed to switch to ${getNetworkConfig(chainId)?.name}. Please switch manually.`);
+        setDeployStatus('error');
+        return;
+      }
+      await checkWallet();
+      setDeployStatus('idle');
+    }
+  }, [walletState.connected, walletState.chainId]);
 
   const handleDeploy = useCallback(async () => {
-    if (!walletState.connected) {
-      setError('Please connect your wallet first');
+    // Re-check wallet state before deploying (handles page refresh cases)
+    const currentState = await getWalletState();
+    setWalletState(currentState);
+
+    if (!currentState.connected) {
+      // Prompt user to connect
+      setError('Wallet not connected. Please click "Connect Wallet" to continue.');
+      setDeployStatus('idle');
       return;
     }
 
-    if (walletState.chainId !== 1) {
-      setError('Please switch to Ethereum Mainnet');
+    if (currentState.chainId !== selectedChainId) {
+      setError(`Please switch to ${getNetworkConfig(selectedChainId)?.name || 'the selected network'}`);
+      setDeployStatus('idle');
       return;
     }
 
@@ -85,7 +120,7 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer }: Dep
     setDeployedAddress(null);
 
     try {
-      const result = await deployProxy(initializer, bestNonce);
+      const result = await deployProxy(initializer, bestNonce, bestAddress);
       setTxHash(result.txHash);
       setDeployedAddress(result.proxyAddress);
       setDeployStatus('confirming');
@@ -100,14 +135,23 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer }: Dep
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Deployment failed';
-      setError(message);
+
+      // If wallet connection was lost, update state and show connect button
+      if (message.includes('Wallet not connected') || message.includes('not initialized')) {
+        await checkWallet();
+        setError('Wallet connection lost. Please reconnect.');
+      } else {
+        setError(message);
+      }
       setDeployStatus('error');
     }
-  }, [walletState, initializer, bestNonce]);
+  }, [initializer, bestNonce, selectedChainId]);
 
   const walletAvailable = isWalletAvailable();
-  const isMainnet = walletState.chainId === 1;
-  const canDeploy = walletState.connected && isMainnet && deployStatus !== 'deploying' && deployStatus !== 'confirming';
+  const isCorrectNetwork = walletState.chainId === selectedChainId;
+  const canDeploy = walletState.connected && isCorrectNetwork && deployStatus !== 'deploying' && deployStatus !== 'confirming';
+  const currentNetworkConfig = walletState.chainId ? getNetworkConfig(walletState.chainId) : null;
+  const selectedNetworkConfig = getNetworkConfig(selectedChainId);
 
   return (
     <div className="glass-card p-6 border-primary/30">
@@ -147,27 +191,28 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer }: Dep
                 </p>
               </div>
               <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                isMainnet
+                isCorrectNetwork
                   ? 'bg-primary/20 text-primary'
                   : 'bg-yellow-500/20 text-yellow-300'
               }`}>
-                {isMainnet ? 'Mainnet' : `Chain ${walletState.chainId}`}
+                {currentNetworkConfig?.name || `Chain ${walletState.chainId}`}
               </div>
             </div>
           </div>
         )}
 
         {/* Network Warning */}
-        {walletState.connected && !isMainnet && (
+        {walletState.connected && !isCorrectNetwork && (
           <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-4">
             <p className="text-yellow-200 text-sm mb-2">
-              Please switch to Ethereum Mainnet to deploy.
+              Please switch to {selectedNetworkConfig?.name || 'the selected network'} to deploy.
             </p>
             <button
-              onClick={switchToMainnet}
+              onClick={() => handleNetworkChange(selectedChainId)}
+              disabled={deployStatus === 'switching'}
               className="text-yellow-300 text-sm underline hover:text-yellow-100"
             >
-              Switch to Mainnet
+              {deployStatus === 'switching' ? 'Switching...' : `Switch to ${selectedNetworkConfig?.name}`}
             </button>
           </div>
         )}
@@ -196,7 +241,7 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer }: Dep
                 Confirming...
               </span>
             ) : (
-              'Deploy Safe'
+              `Deploy Safe on ${selectedNetworkConfig?.name || 'Network'}`
             )}
           </button>
         )}
@@ -214,7 +259,7 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer }: Dep
             <div>
               <p className="text-white/50 text-xs uppercase tracking-wider mb-1">Transaction Hash</p>
               <a
-                href={getEtherscanTxLink(txHash)}
+                href={getExplorerTxLink(txHash, selectedChainId)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-mono text-sm text-primary hover:text-primary-300 underline break-all"
@@ -242,15 +287,15 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer }: Dep
 
             <div className="flex flex-col sm:flex-row gap-3">
               <a
-                href={getEtherscanTxLink(txHash!)}
+                href={getExplorerTxLink(txHash!, selectedChainId)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="glass-button text-center flex-1"
               >
-                View on Etherscan
+                View on Explorer
               </a>
               <a
-                href={getSafeAppLink(deployedAddress)}
+                href={getSafeAppLink(deployedAddress, selectedChainId)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="glass-button text-center flex-1 bg-primary/20 hover:bg-primary/30 border-primary/50"

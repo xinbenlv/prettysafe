@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { keccak256, type Address, type Hex } from 'viem';
-import { encodeSafeSetup, prepareShaderData, type SafeConfig } from '../lib/safe-encoder';
+import { type Address, type Hex } from 'viem';
+import { encodeSafeSetup, prepareShaderData, deriveSafeAddress, type SafeConfig } from '../lib/safe-encoder';
 import shaderCode from '../../gnosis-create2.wgsl?raw';
 
 export interface MiningState {
@@ -28,6 +28,7 @@ interface GPUResources {
   paramsBuffer: GPUBuffer;
   resultsBuffer: GPUBuffer;
   readbackBuffer: GPUBuffer;
+  isDestroyed: boolean;
 }
 
 export function useSafeMiner() {
@@ -54,6 +55,7 @@ export function useSafeMiner() {
   const startTimeRef = useRef<number>(0);
   const iterationRef = useRef<number>(0);
   const shouldStopRef = useRef<boolean>(false);
+  const configRef = useRef<SafeConfig | null>(null);
 
   // Check WebGPU support on mount
   useEffect(() => {
@@ -188,6 +190,7 @@ export function useSafeMiner() {
         paramsBuffer,
         resultsBuffer,
         readbackBuffer,
+        isDestroyed: false,
       };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to initialize GPU';
@@ -198,6 +201,9 @@ export function useSafeMiner() {
 
   const startMining = useCallback(async (config: SafeConfig) => {
     if (miningState.isRunning) return;
+
+    // Store config for result verification
+    configRef.current = config;
 
     // Generate and store the initializer
     const initializerData = encodeSafeSetup(config);
@@ -233,7 +239,7 @@ export function useSafeMiner() {
 
   const runMiningLoop = async () => {
     const resources = gpuResourcesRef.current;
-    if (!resources || shouldStopRef.current) {
+    if (!resources || shouldStopRef.current || resources.isDestroyed) {
       setMiningState(prev => ({ ...prev, isRunning: false }));
       return;
     }
@@ -246,6 +252,11 @@ export function useSafeMiner() {
     const itemsPerDispatch = workgroupSize * dispatchX * dispatchY;
 
     try {
+      // Check if device is lost or we should stop
+      if (shouldStopRef.current || resources.isDestroyed) {
+        return;
+      }
+
       // Update params
       const params = new Uint32Array([0, iterationRef.current, 0, 0]);
       device.queue.writeBuffer(paramsBuffer, 0, params);
@@ -264,8 +275,22 @@ export function useSafeMiner() {
       device.queue.submit([commandEncoder.finish()]);
       await device.queue.onSubmittedWorkDone();
 
-      // Read back results
-      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      // Check again before mapAsync (device might have been destroyed while waiting)
+      if (shouldStopRef.current || resources.isDestroyed) {
+        return;
+      }
+
+      // Read back results with error handling for device loss
+      try {
+        await readbackBuffer.mapAsync(GPUMapMode.READ);
+      } catch (mapError) {
+        // Device was likely destroyed - this is expected when stopping
+        if (shouldStopRef.current || resources.isDestroyed) {
+          return;
+        }
+        throw mapError;
+      }
+
       const resultData = new Uint32Array(readbackBuffer.getMappedRange().slice(0));
       readbackBuffer.unmap();
 
@@ -280,21 +305,20 @@ export function useSafeMiner() {
       let bestNonce: bigint | null = miningState.bestNonce;
       let bestAddress: Address | null = miningState.bestAddress;
 
-      if (found) {
+      if (found && configRef.current) {
         const nonceLow = resultData[0];
         const nonceHigh = resultData[1];
-        bestNonce = BigInt(nonceHigh) * BigInt(0x100000000) + BigInt(nonceLow);
+        const gpuNonce = BigInt(nonceHigh) * BigInt(0x100000000) + BigInt(nonceLow);
 
-        // Convert address u32s to hex
-        const addrBytes = new Uint8Array(20);
-        for (let i = 0; i < 5; i++) {
-          const word = resultData[2 + i];
-          addrBytes[i * 4] = word & 0xFF;
-          addrBytes[i * 4 + 1] = (word >> 8) & 0xFF;
-          addrBytes[i * 4 + 2] = (word >> 16) & 0xFF;
-          addrBytes[i * 4 + 3] = (word >> 24) & 0xFF;
+        // IMPORTANT: Verify the result on CPU to guard against GPU race conditions
+        // The shader has race conditions between atomic stores of nonce and address
+        const verified = deriveSafeAddress(configRef.current, gpuNonce);
+        
+        // Only update if this is a better result than what we have
+        if (bestAddress === null || BigInt(verified.address) < BigInt(bestAddress)) {
+          bestNonce = gpuNonce;
+          bestAddress = verified.address;
         }
-        bestAddress = `0x${Array.from(addrBytes).map(b => b.toString(16).padStart(2, '0')).join('')}` as Address;
       }
 
       setMiningState(prev => ({
@@ -311,6 +335,10 @@ export function useSafeMiner() {
         miningLoopRef.current = requestAnimationFrame(() => runMiningLoop());
       }
     } catch (error: unknown) {
+      // Ignore errors if we're stopping - they're expected
+      if (shouldStopRef.current || resources.isDestroyed) {
+        return;
+      }
       const message = error instanceof Error ? error.message : 'Mining error';
       setMiningState(prev => ({
         ...prev,
@@ -328,10 +356,19 @@ export function useSafeMiner() {
     }
     setMiningState(prev => ({ ...prev, isRunning: false }));
 
-    // Cleanup GPU resources
+    // Cleanup GPU resources - mark as destroyed first to prevent pending operations
     if (gpuResourcesRef.current) {
-      gpuResourcesRef.current.device.destroy();
+      gpuResourcesRef.current.isDestroyed = true;
+      // Use setTimeout to allow pending operations to complete/fail gracefully
+      const device = gpuResourcesRef.current.device;
       gpuResourcesRef.current = null;
+      setTimeout(() => {
+        try {
+          device.destroy();
+        } catch {
+          // Ignore errors during cleanup
+        }
+      }, 100);
     }
   }, []);
 
@@ -356,7 +393,12 @@ export function useSafeMiner() {
         cancelAnimationFrame(miningLoopRef.current);
       }
       if (gpuResourcesRef.current) {
-        gpuResourcesRef.current.device.destroy();
+        gpuResourcesRef.current.isDestroyed = true;
+        try {
+          gpuResourcesRef.current.device.destroy();
+        } catch {
+          // Ignore errors during cleanup
+        }
       }
     };
   }, []);

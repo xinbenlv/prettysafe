@@ -9,7 +9,17 @@ import {
   type Chain,
 } from 'viem';
 import { mainnet } from 'viem/chains';
-import { PROXY_FACTORY, PROXY_FACTORY_ABI, SAFE_SINGLETON } from './gnosis-constants';
+import {
+  PROXY_FACTORY,
+  PROXY_FACTORY_ABI,
+  SAFE_SINGLETON,
+  SUPPORTED_NETWORKS,
+  COMING_SOON_NETWORKS,
+  getNetworkConfig,
+  isSupportedNetwork,
+  isNetworkEnabled,
+  type NetworkConfig,
+} from './gnosis-constants';
 
 // Extend window type for ethereum
 declare global {
@@ -37,6 +47,7 @@ export interface DeployResult {
 
 let walletClient: WalletClient | null = null;
 let publicClient: PublicClient | null = null;
+let currentChain: Chain = mainnet;
 
 /**
  * Check if MetaMask or another Ethereum wallet is available.
@@ -46,9 +57,48 @@ export function isWalletAvailable(): boolean {
 }
 
 /**
+ * Parse error message to get a user-friendly version.
+ */
+function parseErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'An unknown error occurred';
+  }
+
+  const message = error.message.toLowerCase();
+
+  // User rejection patterns
+  if (
+    message.includes('user rejected') ||
+    message.includes('user denied') ||
+    message.includes('user cancelled') ||
+    message.includes('rejected the request')
+  ) {
+    return 'Transaction was rejected by user';
+  }
+
+  // Insufficient funds
+  if (message.includes('insufficient funds')) {
+    return 'Insufficient funds for transaction';
+  }
+
+  // Network errors
+  if (message.includes('network') || message.includes('disconnected')) {
+    return 'Network error. Please check your connection.';
+  }
+
+  // Return first line of error message if it's too long
+  const firstLine = error.message.split('\n')[0];
+  if (firstLine.length > 100) {
+    return firstLine.substring(0, 100) + '...';
+  }
+
+  return firstLine;
+}
+
+/**
  * Connect to the user's wallet.
  */
-export async function connectWallet(): Promise<WalletState> {
+export async function connectWallet(targetChainId?: number): Promise<WalletState> {
   if (!isWalletAvailable()) {
     return {
       connected: false,
@@ -79,15 +129,19 @@ export async function connectWallet(): Promise<WalletState> {
     })) as string;
     const chainId = parseInt(chainIdHex, 16);
 
+    // Determine which chain to use
+    const networkConfig = getNetworkConfig(targetChainId || chainId);
+    currentChain = networkConfig?.chain || mainnet;
+
     // Create viem clients
     walletClient = createWalletClient({
       account: accounts[0],
-      chain: mainnet,
+      chain: currentChain,
       transport: custom(window.ethereum!),
     });
 
     publicClient = createPublicClient({
-      chain: mainnet,
+      chain: currentChain,
       transport: custom(window.ethereum!),
     });
 
@@ -98,18 +152,18 @@ export async function connectWallet(): Promise<WalletState> {
       error: null,
     };
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Failed to connect wallet';
     return {
       connected: false,
       address: null,
       chainId: null,
-      error: message,
+      error: parseErrorMessage(error),
     };
   }
 }
 
 /**
  * Get current wallet state without prompting for connection.
+ * Also initializes viem clients if the wallet is already connected.
  */
 export async function getWalletState(): Promise<WalletState> {
   if (!isWalletAvailable()) {
@@ -127,6 +181,9 @@ export async function getWalletState(): Promise<WalletState> {
     })) as Address[];
 
     if (!accounts || accounts.length === 0) {
+      // Clear clients if no accounts
+      walletClient = null;
+      publicClient = null;
       return {
         connected: false,
         address: null,
@@ -139,6 +196,28 @@ export async function getWalletState(): Promise<WalletState> {
       method: 'eth_chainId',
     })) as string;
     const chainId = parseInt(chainIdHex, 16);
+
+    // Initialize viem clients if not already done or if account/chain changed
+    const needsClientInit = !walletClient ||
+                            !publicClient ||
+                            walletClient.account?.address?.toLowerCase() !== accounts[0].toLowerCase() ||
+                            currentChain.id !== chainId;
+
+    if (needsClientInit) {
+      const networkConfig = getNetworkConfig(chainId);
+      currentChain = networkConfig?.chain || mainnet;
+
+      walletClient = createWalletClient({
+        account: accounts[0],
+        chain: currentChain,
+        transport: custom(window.ethereum!),
+      });
+
+      publicClient = createPublicClient({
+        chain: currentChain,
+        transport: custom(window.ethereum!),
+      });
+    }
 
     return {
       connected: true,
@@ -157,11 +236,36 @@ export async function getWalletState(): Promise<WalletState> {
 }
 
 /**
+ * Update the viem clients for the current chain.
+ */
+export function updateClientsForChain(chainId: number): void {
+  const networkConfig = getNetworkConfig(chainId);
+  if (!networkConfig) return;
+
+  currentChain = networkConfig.chain;
+
+  if (walletClient && publicClient) {
+    // Recreate clients with new chain
+    walletClient = createWalletClient({
+      account: walletClient.account!,
+      chain: currentChain,
+      transport: custom(window.ethereum!),
+    });
+
+    publicClient = createPublicClient({
+      chain: currentChain,
+      transport: custom(window.ethereum!),
+    });
+  }
+}
+
+/**
  * Deploy a Gnosis Safe proxy using the discovered nonce.
  */
 export async function deployProxy(
   initializer: Hex,
-  saltNonce: bigint
+  saltNonce: bigint,
+  expectedAddress?: Address
 ): Promise<DeployResult> {
   if (!walletClient) {
     throw new Error('Wallet not connected');
@@ -171,34 +275,65 @@ export async function deployProxy(
     throw new Error('Public client not initialized');
   }
 
-  // Get the connected account
-  const [account] = await walletClient.getAddresses();
-  if (!account) {
-    throw new Error('No account available');
+  // Check if the network is supported and enabled
+  const chainId = currentChain.id;
+  if (!isSupportedNetwork(chainId) || !isNetworkEnabled(chainId)) {
+    throw new Error(`Deployment not yet supported on ${currentChain.name || 'this network'}`);
   }
 
-  // Simulate the transaction first to get the proxy address
-  const { result: proxyAddress } = await publicClient.simulateContract({
-    address: PROXY_FACTORY,
-    abi: PROXY_FACTORY_ABI,
-    functionName: 'createProxyWithNonce',
-    args: [SAFE_SINGLETON, initializer, saltNonce],
-    account,
-  });
+  try {
+    // Get the connected account
+    const [account] = await walletClient.getAddresses();
+    if (!account) {
+      throw new Error('No account available');
+    }
 
-  // Execute the transaction
-  const txHash = await walletClient.writeContract({
-    address: PROXY_FACTORY,
-    abi: PROXY_FACTORY_ABI,
-    functionName: 'createProxyWithNonce',
-    args: [SAFE_SINGLETON, initializer, saltNonce],
-    account,
-  });
+    // Check if a contract already exists at the expected address
+    if (expectedAddress) {
+      const code = await publicClient.getCode({ address: expectedAddress });
+      if (code && code !== '0x') {
+        throw new Error(
+          `Safe already deployed at ${expectedAddress}. ` +
+          `This address already exists on ${currentChain.name || 'this network'}. ` +
+          `Use a different salt or check your existing Safe.`
+        );
+      }
+    }
 
-  return {
-    txHash,
-    proxyAddress,
-  };
+    // Simulate the transaction first to get the proxy address
+    const { result: proxyAddress } = await publicClient.simulateContract({
+      address: PROXY_FACTORY,
+      abi: PROXY_FACTORY_ABI,
+      functionName: 'createProxyWithNonce',
+      args: [SAFE_SINGLETON, initializer, saltNonce],
+      account,
+    });
+
+    // Execute the transaction
+    const txHash = await walletClient.writeContract({
+      address: PROXY_FACTORY,
+      abi: PROXY_FACTORY_ABI,
+      functionName: 'createProxyWithNonce',
+      args: [SAFE_SINGLETON, initializer, saltNonce],
+      account,
+      chain: currentChain,
+    });
+
+    return {
+      txHash,
+      proxyAddress,
+    };
+  } catch (error: unknown) {
+    const message = parseErrorMessage(error);
+    // Provide more specific error for Create2 failures
+    if (message.includes('Create2 call failed') || message.includes('execution reverted')) {
+      throw new Error(
+        'Deployment failed. This usually means a Safe already exists at this address. ' +
+        'Try mining a new salt or verify the address on the block explorer.'
+      );
+    }
+    throw new Error(message);
+  }
 }
 
 /**
@@ -230,34 +365,87 @@ export async function waitForTransaction(txHash: Hex): Promise<{
 }
 
 /**
- * Switch to Ethereum mainnet.
+ * Switch to a specific chain.
  */
-export async function switchToMainnet(): Promise<boolean> {
+export async function switchToChain(chainId: number): Promise<boolean> {
   if (!isWalletAvailable()) {
+    return false;
+  }
+
+  const networkConfig = getNetworkConfig(chainId);
+  if (!networkConfig) {
     return false;
   }
 
   try {
     await window.ethereum!.request({
       method: 'wallet_switchEthereumChain',
-      params: [{ chainId: '0x1' }],
+      params: [{ chainId: `0x${chainId.toString(16)}` }],
     });
+    updateClientsForChain(chainId);
     return true;
-  } catch {
+  } catch (switchError: unknown) {
+    // If the chain hasn't been added to MetaMask, try adding it
+    if ((switchError as { code?: number })?.code === 4902) {
+      try {
+        await window.ethereum!.request({
+          method: 'wallet_addEthereumChain',
+          params: [
+            {
+              chainId: `0x${chainId.toString(16)}`,
+              chainName: networkConfig.name,
+              nativeCurrency: networkConfig.chain.nativeCurrency,
+              rpcUrls: [networkConfig.chain.rpcUrls.default.http[0]],
+              blockExplorerUrls: [networkConfig.explorerUrl],
+            },
+          ],
+        });
+        updateClientsForChain(chainId);
+        return true;
+      } catch {
+        return false;
+      }
+    }
     return false;
   }
 }
 
 /**
- * Generate Etherscan link for a transaction.
+ * Generate block explorer link for a transaction.
  */
-export function getEtherscanTxLink(txHash: Hex): string {
-  return `https://etherscan.io/tx/${txHash}`;
+export function getExplorerTxLink(txHash: Hex, chainId: number): string {
+  const networkConfig = getNetworkConfig(chainId);
+  const explorerUrl = networkConfig?.explorerUrl || 'https://etherscan.io';
+  return `${explorerUrl}/tx/${txHash}`;
 }
 
 /**
  * Generate Safe UI link for a deployed Safe.
  */
-export function getSafeAppLink(address: Address): string {
-  return `https://app.safe.global/home?safe=eth:${address}`;
+export function getSafeAppLink(address: Address, chainId: number): string {
+  const networkConfig = getNetworkConfig(chainId);
+  const prefix = networkConfig?.safeAppPrefix || 'eth';
+  return `https://app.safe.global/home?safe=${prefix}:${address}`;
 }
+
+/**
+ * Get list of enabled networks for UI (only networks where mining/deployment works).
+ */
+export function getEnabledNetworks(): Array<{ chainId: number; name: string }> {
+  return Object.entries(SUPPORTED_NETWORKS)
+    .filter(([, config]) => config.enabled)
+    .map(([chainId, config]) => ({
+      chainId: parseInt(chainId),
+      name: config.name,
+    }));
+}
+
+/**
+ * Get list of coming soon networks for UI display.
+ */
+export function getComingSoonNetworks(): Array<{ chainId: number; name: string }> {
+  return COMING_SOON_NETWORKS;
+}
+
+// Re-export for convenience
+export { isSupportedNetwork, getNetworkConfig, isNetworkEnabled };

@@ -7,7 +7,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "benchmark": "bun run benchmark.ts",
-    "test": "bun run test.ts"
+    "test": "bun run test.ts",
+    "test:derivation": "npx tsx src/lib/test-derivation.ts"
   },
   "dependencies": {
     "@webgpu/types": "^0.1.68",
