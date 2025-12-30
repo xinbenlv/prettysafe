@@ -1,6 +1,6 @@
 export default function Footer() {
   return (
-    <footer className="py-8 text-center glass-card border-0 border-t rounded-none">
+    <footer className="py-8 text-center glass-card border-0 border-t rounded-none space-y-3">
       <p style={{ color: 'var(--color-text-secondary)' }}>
         Built w/ ❤️ by{' '}
         <a
@@ -11,6 +11,19 @@ export default function Footer() {
         >
           Project PrettySafe
         </a>
+      </p>
+      <p className="text-xs max-w-2xl mx-auto px-4" style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}>
+        This project is an open source community contribution to the Safe ecosystem.
+        It is not associated with nor endorsed by{' '}
+        <a
+          href="https://safe.global"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-primary transition-colors"
+        >
+          Safe.Global
+        </a>
+        {' '}or the Safe Ecosystem Foundation.
       </p>
     </footer>
   );

@@ -17,6 +17,7 @@
   --color-bg-card: #FFFFFF;
   --color-bg-input: #FFFFFF;
   --color-bg-page: #F7FCF9;
+  --color-bg-header: #FFFFFF;
   --color-bg-button-inactive: #F7FCF9;
   --shadow-glow: 0 4px 14px 0 rgba(28, 209, 125, 0.39);
   --shadow-glow-lg: 0 6px 20px 0 rgba(28, 209, 125, 0.45);
@@ -38,6 +39,7 @@
   --color-bg-card: rgba(255, 255, 255, 0.05);
   --color-bg-input: rgba(255, 255, 255, 0.08);
   --color-bg-page: linear-gradient(to bottom right, #0a0a0a, #0f0f0f, #1a1a1a);
+  --color-bg-header: #0a0a0a;
   --color-bg-button-inactive: rgba(255, 255, 255, 0.05);
   --shadow-glow: 0 4px 14px 0 rgba(28, 209, 125, 0.25);
   --shadow-glow-lg: 0 6px 20px 0 rgba(28, 209, 125, 0.35);
@@ -229,6 +231,10 @@
 
   .bg-surface-card {
     background-color: var(--color-bg-card);
+  }
+
+  .bg-header {
+    background-color: var(--color-bg-header);
   }
 
   .bg-button-inactive {

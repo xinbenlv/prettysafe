@@ -109,7 +109,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="bg-surface-card border-b border-surface sticky top-0 z-40">
+      <header className="border-b border-surface sticky top-0 z-40" style={{ backgroundColor: 'var(--color-bg-header)' }}>
         <div className="max-w-4xl mx-auto w-full px-4 py-4 pr-24">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
