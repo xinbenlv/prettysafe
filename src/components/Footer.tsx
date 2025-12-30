@@ -1,4 +1,6 @@
 export default function Footer() {
+  const currentYear = new Date().getFullYear();
+
   return (
     <footer className="py-8 text-center glass-card border-0 border-t rounded-none space-y-3">
       <p style={{ color: 'var(--color-text-secondary)' }}>
@@ -10,6 +12,17 @@ export default function Footer() {
           className="text-primary hover:text-primary-600 transition-colors underline underline-offset-2"
         >
           Project PrettySafe
+        </a>
+      </p>
+      <p className="text-xs" style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}>
+        © {currentYear} PrettySafe •{' '}
+        <a
+          href="https://github.com/xinbenlv/prettysafe/blob/main/LICENSE"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-primary transition-colors"
+        >
+          MIT License
         </a>
       </p>
       <p className="text-xs max-w-2xl mx-auto px-4" style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}>
