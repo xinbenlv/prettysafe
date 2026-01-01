@@ -26,7 +26,7 @@ export default function Footer() {
         </a>
       </p>
       <p className="text-xs max-w-2xl mx-auto px-4" style={{ color: 'var(--color-text-secondary)', opacity: 0.7 }}>
-        This project is an open source community contribution to the Safe ecosystem.
+        This project is a Public Good and open source contribution to the Safe ecosystem.
         It is not associated with nor endorsed by{' '}
         <a
           href="https://safe.global"
