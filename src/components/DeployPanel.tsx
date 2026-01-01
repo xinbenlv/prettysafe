@@ -176,8 +176,16 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
       <div className="space-y-4">
         {/* Wallet Connection */}
         {!walletAvailable ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-sm">
-            No Ethereum wallet detected. Please install MetaMask or another wallet to deploy.
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-sm space-y-2">
+            <p className="font-medium">No Ethereum wallet detected</p>
+            <p>
+              Connecting a wallet is optional—it's a convenience feature that streamlines deployment.
+              You can still mine salt without connecting, and use the mined salt manually via Etherscan,
+              developer CLI, or other deployment tools.
+            </p>
+            <p className="text-xs text-amber-700 mt-2">
+              To deploy directly from this app, please install MetaMask or another Ethereum wallet.
+            </p>
           </div>
         ) : !walletState.connected ? (
           <button

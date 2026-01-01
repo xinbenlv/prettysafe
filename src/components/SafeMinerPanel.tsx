@@ -398,13 +398,20 @@ export default function SafeMinerPanel() {
       {/* No Wallet Available Warning */}
       {!walletAvailable && (
         <div className="card p-4 border-amber-500/50" style={{ backgroundColor: 'rgba(251, 191, 36, 0.1)', borderColor: 'rgba(251, 191, 36, 0.3)' }}>
-          <div className="flex items-center gap-3">
-            <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-start gap-3">
+            <svg className="w-6 h-6 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <div>
+            <div className="space-y-2">
               <p className="text-amber-500 font-medium">No Wallet Detected</p>
-              <p className="text-amber-500/80 text-sm">Install MetaMask or another Ethereum wallet to deploy</p>
+              <p className="text-amber-500/80 text-sm">
+                Connecting a wallet is optional—it's a convenience feature that streamlines deployment.
+                You can still mine salt without connecting, and use the mined salt manually via Etherscan,
+                developer CLI, or other deployment tools.
+              </p>
+              <p className="text-amber-500/70 text-xs mt-2">
+                To deploy directly from this app, install MetaMask or another Ethereum wallet.
+              </p>
             </div>
           </div>
         </div>
