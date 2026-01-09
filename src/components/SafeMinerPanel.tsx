@@ -64,6 +64,59 @@ function formatNumber(num: number): string {
   return num.toString();
 }
 
+// ERC-8117 Compressed Display Format for Addresses
+// https://eips.ethereum.org/EIPS/eip-8117
+const SUPERSCRIPTS: Record<string, string> = {
+  '0': '\u2070', '1': '\u00B9', '2': '\u00B2', '3': '\u00B3', '4': '\u2074',
+  '5': '\u2075', '6': '\u2076', '7': '\u2077', '8': '\u2078', '9': '\u2079'
+};
+
+function toSuperscript(num: number): string {
+  return String(num).split('').map(digit => SUPERSCRIPTS[digit] || digit).join('');
+}
+
+// ERC-8117: Compress consecutive identical hex characters
+function compressAddressERC8117(address: string, mode: 'unicode' | 'ascii' = 'unicode', truncate: boolean = false): string {
+  // Remove 0x prefix for processing
+  const cleanAddress = address.startsWith('0x') ? address.slice(2) : address;
+
+  // Find and compress sequences of 6+ identical characters
+  const compressed = cleanAddress.replace(/(.)\1{5,}/g, (match) => {
+    const char = match[0];
+    const length = match.length;
+
+    if (mode === 'unicode') {
+      return `${char}${toSuperscript(length)}`;
+    } else {
+      return `${char}{${length}}`;
+    }
+  });
+
+  const fullCompressed = `0x${compressed}`;
+
+  if (!truncate) {
+    return fullCompressed;
+  }
+
+  // For truncated format: show first part (including any compression) + ... + last 4 chars
+  // We need to find where the compressed prefix ends and show some context after it
+  // Strategy: show up to 10 chars after 0x, then ..., then last 4 chars of original address
+  const compressedBody = compressed;
+  if (compressedBody.length <= 12) {
+    return fullCompressed; // Too short to truncate
+  }
+
+  // Take first 6 chars of compressed body (after 0x) and last 4 chars of the original address
+  const last4 = cleanAddress.slice(-4);
+  return `0x${compressedBody.slice(0, 6)}...${last4}`;
+}
+
+// Truncated address format: 0x<first 4>...<last 4>
+function truncateAddress(address: string): string {
+  if (address.length < 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 // Format salt nonce as hex string with 0x prefix (trim leading zeros for readability)
 function formatSaltHex(salt: bigint): string {
   if (salt === 0n) return '0x0';
@@ -630,6 +683,55 @@ export default function SafeMinerPanel() {
               <p className="text-secondary-themed text-xs mt-2">
                 {countLeadingZeros(activeResult.address)} leading zeros
               </p>
+
+              {/* Display Formats Section */}
+              <div className="mt-4 pt-4 border-t border-current/10">
+                <p className="text-secondary-themed text-xs uppercase tracking-wider mb-3">Display Formats</p>
+                <div className="space-y-2">
+                  {/* Truncated Format */}
+                  <div className="flex items-center gap-3 bg-surface-inner/50 rounded-lg px-3 py-2">
+                    <span className="text-secondary-themed text-xs w-24 flex-shrink-0">Truncated</span>
+                    <code className="font-mono text-sm text-primary-themed">
+                      {truncateAddress(activeResult.address)}
+                    </code>
+                  </div>
+
+                  {/* ERC-8117 Unicode Format (Truncated) */}
+                  <div className="flex items-center gap-3 bg-surface-inner/50 rounded-lg px-3 py-2">
+                    <span className="text-secondary-themed text-xs w-24 flex-shrink-0">
+                      <a
+                        href="https://eips.ethereum.org/EIPS/eip-8117"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-primary underline decoration-dotted"
+                      >
+                        ERC-8117
+                      </a>
+                    </span>
+                    <code className="font-mono text-sm text-primary-themed">
+                      {compressAddressERC8117(activeResult.address, 'unicode', true)}
+                    </code>
+                  </div>
+
+                  {/* ERC-8117 ASCII Format (Truncated) */}
+                  <div className="flex items-center gap-3 bg-surface-inner/50 rounded-lg px-3 py-2">
+                    <span className="text-secondary-themed text-xs w-24 flex-shrink-0">
+                      <a
+                        href="https://eips.ethereum.org/EIPS/eip-8117"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-primary underline decoration-dotted"
+                      >
+                        ERC-8117
+                      </a>
+                      {' '}ASCII
+                    </span>
+                    <code className="font-mono text-sm text-primary-themed">
+                      {compressAddressERC8117(activeResult.address, 'ascii', true)}
+                    </code>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
