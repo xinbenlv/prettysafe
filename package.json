@@ -12,6 +12,7 @@
     "test:derivation": "npx tsx src/lib/test-derivation.ts"
   },
   "dependencies": {
+    "@metamask/jazzicon": "^2.0.0",
     "@webgpu/types": "^0.1.68",
     "bun-webgpu": "^0.1.4",
     "d3": "^7.9.0",

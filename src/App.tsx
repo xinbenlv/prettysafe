@@ -139,13 +139,13 @@ function App() {
 
       <GithubBanner />
 
-      <main className="flex-1 max-w-4xl mx-auto w-full px-4 py-8 space-y-8">
+      <main className="flex-1 max-w-4xl mx-auto w-full px-3 sm:px-4 py-4 sm:py-8 space-y-4 sm:space-y-8">
         {/* Hero Section */}
-        <section className="text-center space-y-4">
-          <h1 className="text-4xl md:text-5xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
+        <section className="text-center space-y-3 sm:space-y-4">
+          <h1 className="heading-responsive text-3xl sm:text-4xl md:text-5xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
             {mode === 'miner' ? 'Pretty Safe' : 'WebGPU Benchmark'}
           </h1>
-          <p className="text-lg max-w-2xl mx-auto" style={{ color: 'var(--color-text-secondary)' }}>
+          <p className="text-sm sm:text-base md:text-lg max-w-2xl mx-auto px-2" style={{ color: 'var(--color-text-secondary)' }}>
             {mode === 'miner'
               ? <>The World's first browser-Native WebGPU-powered Vanity Address Miner for Safe.<wbr />{' '}
                Mine locally with native GPU performance—Open Source, No Installs, and 100% Client-Side.<wbr />{' '}

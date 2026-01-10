@@ -1,10 +1,15 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import { isAddress, type Address, type Hex } from 'viem';
+import { isAddress, getAddress, type Address, type Hex } from 'viem';
 import { useSafeMiner } from '../hooks/useSafeMiner';
 import { countLeadingZeros, deriveSafeAddress, type SafeConfig } from '../lib/safe-encoder';
 import { getEnabledNetworks, getComingSoonNetworks, connectWallet, getWalletState, isWalletAvailable, type WalletState } from '../lib/wallet';
 import { PROXY_FACTORY, PROXY_CREATION_CODE_HASH } from '../lib/gnosis-constants';
 import DeployPanel from './DeployPanel';
+import ConfirmModal from './ConfirmModal';
+import Jazzicon from './Jazzicon';
+
+// Default placeholder address for demo/testing when no wallet is connected
+export const DEFAULT_DEMO_OWNER = '0x0123456789abcdef0123456789abcdef01234567' as Address;
 
 // Network logos as inline SVG components
 function EthereumLogo({ className = "w-5 h-5" }: { className?: string }) {
@@ -158,6 +163,13 @@ export default function SafeMinerPanel() {
     error: null,
   });
   const [isConnecting, setIsConnecting] = useState(false);
+  const [showDemoAddressModal, setShowDemoAddressModal] = useState(false);
+  const [usingDemoAddress, setUsingDemoAddress] = useState(false);
+
+  // Track the locked target zeros for 90% countdown
+  // Only updates when: 1) we find more zeros, or 2) we've done 50%+ of predicted hashes
+  const [lockedTargetZeros, setLockedTargetZeros] = useState<number>(1);
+  const [hashesAtLock, setHashesAtLock] = useState<number>(0);
 
   const enabledNetworks = getEnabledNetworks();
   const comingSoonNetworks = getComingSoonNetworks();
@@ -214,6 +226,38 @@ export default function SafeMinerPanel() {
     }
   }, [miningState.bestNonce]);
 
+  // Update locked target zeros for 90% countdown
+  // Only updates when: 1) we find more zeros, or 2) we've done 50%+ of predicted hashes
+  useEffect(() => {
+    if (!miningState.isRunning) {
+      // Reset when mining stops
+      setLockedTargetZeros(1);
+      setHashesAtLock(0);
+      return;
+    }
+
+    const currentZeros = miningState.bestAddress ? countLeadingZeros(miningState.bestAddress) : 0;
+    const newTargetZeros = currentZeros + 1;
+
+    // Case 1: Found more zeros than current target - update immediately
+    if (newTargetZeros > lockedTargetZeros) {
+      setLockedTargetZeros(newTargetZeros);
+      setHashesAtLock(miningState.totalHashes);
+      return;
+    }
+
+    // Case 2: Check if we've done 50%+ of predicted hashes since last lock
+    const hashesFor90Percent = Math.log(10) * Math.pow(16, lockedTargetZeros);
+    const hashesSinceLock = miningState.totalHashes - hashesAtLock;
+    const progressSinceLock = hashesSinceLock / hashesFor90Percent;
+
+    if (progressSinceLock >= 0.5 && newTargetZeros !== lockedTargetZeros) {
+      // We've done 50%+ of predicted hashes, update the target
+      setLockedTargetZeros(newTargetZeros);
+      setHashesAtLock(miningState.totalHashes);
+    }
+  }, [miningState.isRunning, miningState.bestAddress, miningState.totalHashes, lockedTargetZeros, hashesAtLock]);
+
   const parseOwners = useCallback((): Address[] | null => {
     const lines = ownersText
       .split(/[\n,]/)
@@ -244,23 +288,57 @@ export default function SafeMinerPanel() {
     return addresses;
   }, [ownersText]);
 
-  const handleStart = useCallback(() => {
-    setValidationError(null);
-    const owners = parseOwners();
-    if (!owners) return;
-
-    if (threshold < 1 || threshold > owners.length) {
-      setValidationError(`Threshold must be between 1 and ${owners.length}`);
+  // Proceed with mining after validation/confirmation
+  const proceedWithMining = useCallback((ownersList: Address[]) => {
+    if (threshold < 1 || threshold > ownersList.length) {
+      setValidationError(`Threshold must be between 1 and ${ownersList.length}`);
       return;
     }
 
     const config: SafeConfig = {
-      owners,
+      owners: ownersList,
       threshold: BigInt(threshold),
     };
 
     startMining(config);
-  }, [parseOwners, threshold, startMining]);
+  }, [threshold, startMining]);
+
+  // Handle confirming demo address modal
+  const handleConfirmDemoAddress = useCallback(() => {
+    setShowDemoAddressModal(false);
+    setOwnersText(DEFAULT_DEMO_OWNER);
+    setUsingDemoAddress(true);
+    setThreshold(1);
+
+    // Start mining with the demo address
+    proceedWithMining([DEFAULT_DEMO_OWNER]);
+  }, [proceedWithMining]);
+
+  const handleStart = useCallback(() => {
+    setValidationError(null);
+
+    // Check if no owner is entered and wallet is not connected
+    const currentOwners = ownersText
+      .split(/[\n,]/)
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    if (currentOwners.length === 0 && !walletState.connected) {
+      // Show the demo address confirmation modal
+      setShowDemoAddressModal(true);
+      return;
+    }
+
+    const owners = parseOwners();
+    if (!owners) return;
+
+    // Track if using demo address
+    const isDemoAddress = owners.length === 1 &&
+      owners[0].toLowerCase() === DEFAULT_DEMO_OWNER.toLowerCase();
+    setUsingDemoAddress(isDemoAddress);
+
+    proceedWithMining(owners);
+  }, [parseOwners, ownersText, walletState.connected, proceedWithMining]);
 
   const handleStop = useCallback(() => {
     stopMining();
@@ -391,8 +469,48 @@ export default function SafeMinerPanel() {
 
   const walletAvailable = isWalletAvailable();
 
+  // Check if currently using demo address
+  const isCurrentlyUsingDemoAddress = useMemo(() => {
+    const currentOwners = ownersText
+      .split(/[\n,]/)
+      .map(line => line.trim().toLowerCase())
+      .filter(line => line.length > 0);
+    return currentOwners.length === 1 &&
+      currentOwners[0] === DEFAULT_DEMO_OWNER.toLowerCase();
+  }, [ownersText]);
+
   return (
     <div className="space-y-6">
+      {/* Demo Address Warning Modal */}
+      <ConfirmModal
+        isOpen={showDemoAddressModal}
+        title="Use Demo Address?"
+        message={
+          <div className="space-y-3">
+            <p>
+              No wallet is connected and no owner address is entered.
+            </p>
+            <p>
+              A <strong>demo address</strong> will be used as the default owner:
+            </p>
+            <code className="block bg-surface-inner px-3 py-2 rounded-lg text-xs font-mono break-all">
+              {DEFAULT_DEMO_OWNER.slice(0, 20)}...{DEFAULT_DEMO_OWNER.slice(-8)}
+            </code>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-800 text-left">
+              <p className="font-medium text-sm">⚠️ Warning</p>
+              <p className="text-xs mt-1">
+                This is a placeholder address for demonstration only.
+                <strong> Do NOT use it for actual deployment</strong> — you won't have access to the deployed Safe!
+              </p>
+            </div>
+          </div>
+        }
+        confirmText="Use Demo Address & Mine"
+        cancelText="Cancel"
+        variant="warning"
+        onConfirm={handleConfirmDemoAddress}
+        onCancel={() => setShowDemoAddressModal(false)}
+      />
       {/* Prominent Connect Wallet Button */}
       {walletAvailable && !walletState.connected && (
         <button
@@ -533,20 +651,20 @@ export default function SafeMinerPanel() {
             <label className="block text-primary-themed font-medium mb-2">
               Deploy Network
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
               {enabledNetworks.map((network: { chainId: number; name: string }) => (
                 <button
                   key={network.chainId}
                   type="button"
                   onClick={() => setSelectedChainId(network.chainId)}
                   disabled={miningState.isRunning}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-all ${
+                  className={`network-btn flex items-center gap-1.5 sm:gap-2 px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border transition-all text-xs sm:text-sm ${
                     selectedChainId === network.chainId
                       ? 'bg-primary/10 border-primary text-primary-themed'
                       : 'bg-button-inactive border-surface text-secondary-themed hover:border-primary/50'
                   } ${miningState.isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
-                  <NetworkLogo chainId={network.chainId} className="w-5 h-5" />
+                  <NetworkLogo chainId={network.chainId} className="network-logo w-4 h-4 sm:w-5 sm:h-5" />
                   <span>{network.name}</span>
                 </button>
               ))}
@@ -555,12 +673,12 @@ export default function SafeMinerPanel() {
                   key={network.chainId}
                   type="button"
                   disabled
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl border bg-button-inactive border-surface text-secondary-themed opacity-50 cursor-not-allowed"
+                  className="network-btn flex items-center gap-1.5 sm:gap-2 px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border bg-button-inactive border-surface text-secondary-themed opacity-50 cursor-not-allowed text-xs sm:text-sm"
                   title="Coming Soon"
                 >
-                  <div className="w-5 h-5 bg-surface-inner rounded-full" style={{ backgroundColor: 'var(--color-surface-border)' }} />
+                  <div className="network-logo w-4 h-4 sm:w-5 sm:h-5 bg-surface-inner rounded-full" style={{ backgroundColor: 'var(--color-surface-border)' }} />
                   <span>{network.name}</span>
-                  <span className="text-xs">(Soon)</span>
+                  <span className="text-[10px] sm:text-xs">(Soon)</span>
                 </button>
               ))}
             </div>
@@ -582,7 +700,7 @@ export default function SafeMinerPanel() {
           </div>
 
           {/* Unified Salt Input with Mining Button */}
-          <div className="border-t border-surface pt-4 mt-4">
+          <div className="border-t border-surface pt-4 mt-4 pb-16 sm:pb-0">
             <label htmlFor="salt" className="block text-primary-themed font-medium mb-2">
               Salt {miningState.bestNonce !== null ? '(Mined)' : '(Custom)'}
             </label>
@@ -620,24 +738,24 @@ export default function SafeMinerPanel() {
                   </button>
                 </div>
               </div>
-              {/* Mining Toggle Button */}
+              {/* Mining Toggle Button - Desktop only (hidden on mobile) */}
               <button
                 onClick={miningState.isRunning ? handleStop : handleStart}
                 disabled={!status.supported}
-                className={`px-6 py-2 rounded-full font-medium transition-all whitespace-nowrap ${
+                className={`hidden sm:flex px-6 py-2 rounded-full font-medium transition-all whitespace-nowrap items-center gap-2 ${
                   miningState.isRunning
-                    ? 'bg-red-500 hover:bg-red-600 text-white'
+                    ? 'bg-amber-500 hover:bg-amber-600 text-white'
                     : 'bg-primary hover:shadow-glow-lg text-white shadow-glow'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {miningState.isRunning ? (
-                  <span className="flex items-center gap-2">
+                  <>
                     <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
                     Stop
-                  </span>
+                  </>
                 ) : (
                   'Mine'
                 )}
@@ -672,33 +790,49 @@ export default function SafeMinerPanel() {
                   </span>
                 )}
               </div>
-              <div className="font-mono text-lg break-all">
-                <span className="text-primary font-bold">
-                  {activeResult.address.slice(0, 2 + countLeadingZeros(activeResult.address))}
-                </span>
-                <span className="text-primary-themed">
-                  {activeResult.address.slice(2 + countLeadingZeros(activeResult.address))}
-                </span>
-              </div>
+              {/* ERC-55 Checksummed Address Display */}
+              {(() => {
+                const checksummedAddress = getAddress(activeResult.address);
+                const leadingZerosCount = countLeadingZeros(activeResult.address);
+                return (
+                  <div className="font-mono text-sm sm:text-lg break-all">
+                    <span className="text-primary font-bold">
+                      {checksummedAddress.slice(0, 2 + leadingZerosCount)}
+                    </span>
+                    <span className="text-primary-themed">
+                      {checksummedAddress.slice(2 + leadingZerosCount)}
+                    </span>
+                  </div>
+                );
+              })()}
               <p className="text-secondary-themed text-xs mt-2">
-                {countLeadingZeros(activeResult.address)} leading zeros
+                {countLeadingZeros(activeResult.address)} leading zeros •{' '}
+                <a
+                  href="https://eips.ethereum.org/EIPS/eip-55"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-primary underline decoration-dotted"
+                >
+                  ERC-55
+                </a>{' '}
+                checksummed
               </p>
 
               {/* Display Formats Section */}
-              <div className="mt-4 pt-4 border-t border-current/10">
-                <p className="text-secondary-themed text-xs uppercase tracking-wider mb-3">Display Formats</p>
-                <div className="space-y-2">
-                  {/* Truncated Format */}
-                  <div className="flex items-center gap-3 bg-surface-inner/50 rounded-lg px-3 py-2">
-                    <span className="text-secondary-themed text-xs w-24 flex-shrink-0">Truncated</span>
-                    <code className="font-mono text-sm text-primary-themed">
-                      {truncateAddress(activeResult.address)}
+              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-current/10">
+                <p className="text-secondary-themed text-[10px] sm:text-xs uppercase tracking-wider mb-2 sm:mb-3">Display Formats</p>
+                <div className="space-y-1.5 sm:space-y-2">
+                  {/* Truncated Format - ERC-55 checksummed */}
+                  <div className="flex items-center gap-2 sm:gap-3 bg-surface-inner/50 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2">
+                    <span className="text-secondary-themed text-[10px] sm:text-xs w-16 sm:w-24 flex-shrink-0">Truncated</span>
+                    <code className="font-mono text-xs sm:text-sm text-primary-themed">
+                      {truncateAddress(getAddress(activeResult.address))}
                     </code>
                   </div>
 
-                  {/* ERC-8117 Unicode Format (Truncated) */}
-                  <div className="flex items-center gap-3 bg-surface-inner/50 rounded-lg px-3 py-2">
-                    <span className="text-secondary-themed text-xs w-24 flex-shrink-0">
+                  {/* ERC-8117 Unicode Format (Truncated) - uses ERC-55 checksummed address */}
+                  <div className="flex items-center gap-2 sm:gap-3 bg-surface-inner/50 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2">
+                    <span className="text-secondary-themed text-[10px] sm:text-xs w-16 sm:w-24 flex-shrink-0">
                       <a
                         href="https://eips.ethereum.org/EIPS/eip-8117"
                         target="_blank"
@@ -708,14 +842,14 @@ export default function SafeMinerPanel() {
                         ERC-8117
                       </a>
                     </span>
-                    <code className="font-mono text-sm text-primary-themed">
-                      {compressAddressERC8117(activeResult.address, 'unicode', true)}
+                    <code className="font-mono text-xs sm:text-sm text-primary-themed">
+                      {compressAddressERC8117(getAddress(activeResult.address), 'unicode', true)}
                     </code>
                   </div>
 
-                  {/* ERC-8117 ASCII Format (Truncated) */}
-                  <div className="flex items-center gap-3 bg-surface-inner/50 rounded-lg px-3 py-2">
-                    <span className="text-secondary-themed text-xs w-24 flex-shrink-0">
+                  {/* ERC-8117 ASCII Format (Truncated) - uses ERC-55 checksummed address */}
+                  <div className="flex items-center gap-2 sm:gap-3 bg-surface-inner/50 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2">
+                    <span className="text-secondary-themed text-[10px] sm:text-xs w-16 sm:w-24 flex-shrink-0">
                       <a
                         href="https://eips.ethereum.org/EIPS/eip-8117"
                         target="_blank"
@@ -724,11 +858,30 @@ export default function SafeMinerPanel() {
                       >
                         ERC-8117
                       </a>
-                      {' '}ASCII
+                      <span className="hidden sm:inline"> ASCII</span>
                     </span>
-                    <code className="font-mono text-sm text-primary-themed">
-                      {compressAddressERC8117(activeResult.address, 'ascii', true)}
+                    <code className="font-mono text-xs sm:text-sm text-primary-themed">
+                      {compressAddressERC8117(getAddress(activeResult.address), 'ascii', true)}
                     </code>
+                  </div>
+
+                  {/* Jazzicon - deterministic identicon based on address */}
+                  <div className="flex items-center gap-2 sm:gap-3 bg-surface-inner/50 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2">
+                    <span className="text-secondary-themed text-[10px] sm:text-xs w-16 sm:w-24 flex-shrink-0">
+                      <a
+                        href="https://github.com/MetaMask/jazzicon"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-primary underline decoration-dotted"
+                      >
+                        Jazzicon
+                      </a>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Jazzicon address={activeResult.address} diameter={20} className="sm:hidden" />
+                      <Jazzicon address={activeResult.address} diameter={24} className="hidden sm:block" />
+                      <span className="text-secondary-themed text-[10px] sm:text-xs hidden sm:inline">Deterministic identicon</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -757,33 +910,66 @@ export default function SafeMinerPanel() {
         <div className="card">
           <h3 className="text-lg font-semibold mb-4 text-primary-themed">Mining Progress</h3>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-surface-inner rounded-2xl p-4 border border-surface">
-              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Hashrate</p>
-              <p className="text-xl font-bold text-primary">
+          <div className="mining-stats-grid grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
+            <div className="bg-surface-inner rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-surface">
+              <p className="text-secondary-themed text-[10px] sm:text-xs uppercase tracking-wider mb-1">Hashrate</p>
+              <p className="stat-value text-base sm:text-xl font-bold text-primary">
                 {formatHashrate(miningState.hashrate)}
               </p>
             </div>
 
-            <div className="bg-surface-inner rounded-2xl p-4 border border-surface">
-              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Total Hashes</p>
-              <p className="text-xl font-bold text-primary-themed">
+            <div className="bg-surface-inner rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-surface">
+              <p className="text-secondary-themed text-[10px] sm:text-xs uppercase tracking-wider mb-1">Total Hashes</p>
+              <p className="stat-value text-base sm:text-xl font-bold text-primary-themed">
                 {formatNumber(miningState.totalHashes)}
               </p>
             </div>
 
-            <div className="bg-surface-inner rounded-2xl p-4 border border-surface">
-              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Elapsed Time</p>
-              <p className="text-xl font-bold text-primary-themed">
+            <div className="bg-surface-inner rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-surface">
+              <p className="text-secondary-themed text-[10px] sm:text-xs uppercase tracking-wider mb-1">Elapsed Time</p>
+              <p className="stat-value text-base sm:text-xl font-bold text-primary-themed">
                 {formatTime(miningState.elapsedTime)}
               </p>
             </div>
 
-            <div className="bg-surface-inner rounded-2xl p-4 border border-surface">
-              <p className="text-secondary-themed text-xs uppercase tracking-wider mb-1">Status</p>
-              <p className={`text-xl font-bold ${miningState.isRunning ? 'text-primary' : 'text-secondary-themed'}`}>
-                {miningState.isRunning ? 'Running' : 'Stopped'}
-              </p>
+            <div className="bg-surface-inner rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-surface">
+              <p className="text-secondary-themed text-[10px] sm:text-xs uppercase tracking-wider mb-1">90% Chance</p>
+              {(() => {
+                const currentZeros = miningState.bestAddress ? countLeadingZeros(miningState.bestAddress) : 0;
+                // Use locked target zeros - only updates when we find more zeros or exceed 50% of predicted hashes
+                const targetZeros = lockedTargetZeros;
+                // For 90% probability: hashes = ln(10) * 16^targetZeros ≈ 2.303 * 16^targetZeros
+                // This is derived from: P(success) = 1 - (1-p)^k where p = 1/16^n
+                const hashesFor90Percent = Math.log(10) * Math.pow(16, targetZeros);
+
+                // Calculate remaining hashes needed (from hashesAtLock, not total)
+                const hashesSinceLock = miningState.totalHashes - hashesAtLock;
+                const remainingHashes = Math.max(0, hashesFor90Percent - hashesSinceLock);
+                // Time estimate based on remaining hashes and current hashrate
+                const remainingSeconds = miningState.hashrate > 0 ? remainingHashes / miningState.hashrate : Infinity;
+                // Check if we've exceeded the 90% threshold (overdue)
+                const isOverdue = hashesSinceLock > hashesFor90Percent;
+                // Progress percentage since lock
+                const progressPercent = Math.min(100, (hashesSinceLock / hashesFor90Percent) * 100);
+
+                return (
+                  <>
+                    <p className={`stat-value text-base sm:text-xl font-bold ${isOverdue ? 'text-secondary' : 'text-primary-themed'}`}>
+                      {miningState.hashrate > 0
+                        ? isOverdue
+                          ? `+${formatTime((hashesSinceLock - hashesFor90Percent) / miningState.hashrate)}`
+                          : formatTime(remainingSeconds)
+                        : '—'}
+                    </p>
+                    <p className="text-secondary-themed text-[10px] sm:text-xs mt-1">
+                      {formatNumber(hashesSinceLock)} / {formatNumber(hashesFor90Percent)} ({progressPercent.toFixed(0)}%)
+                    </p>
+                    <p className="text-secondary-themed text-[10px] sm:text-xs">
+                      Target: {targetZeros} zeros (current: {currentZeros})
+                    </p>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -796,8 +982,48 @@ export default function SafeMinerPanel() {
           bestNonce={activeResult.nonce}
           initializer={activeResult.initializer}
           selectedChainId={selectedChainId}
+          usingDemoAddress={isCurrentlyUsingDemoAddress}
         />
       )}
+
+      {/* Floating Mine/Stop Button - Mobile only */}
+      <div 
+        className="fixed bottom-0 left-0 right-0 p-3 sm:hidden z-50 
+                   flex justify-center
+                   transition-all duration-300 ease-in-out
+                   animate-in slide-in-from-bottom-4"
+        style={{ 
+          paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))',
+        }}
+      >
+        <button
+          onClick={miningState.isRunning ? handleStop : handleStart}
+          disabled={!status.supported}
+          className={`w-1/2 min-w-[140px] max-w-[200px] py-3 rounded-full font-semibold text-sm transition-all duration-300 
+                     flex items-center justify-center gap-2
+                     ${miningState.isRunning
+                       ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/30'
+                       : 'bg-primary hover:shadow-glow-lg text-white shadow-glow'
+                     } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          {miningState.isRunning ? (
+            <>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+              </svg>
+              Stop
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Mine
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }

@@ -19,11 +19,12 @@ interface DeployPanelProps {
   bestNonce: bigint;
   initializer: Hex;
   selectedChainId: number;
+  usingDemoAddress?: boolean;
 }
 
 type DeployStatus = 'idle' | 'connecting' | 'switching' | 'deploying' | 'confirming' | 'success' | 'error';
 
-export default function DeployPanel({ bestAddress, bestNonce, initializer, selectedChainId }: DeployPanelProps) {
+export default function DeployPanel({ bestAddress, bestNonce, initializer, selectedChainId, usingDemoAddress = false }: DeployPanelProps) {
   const [walletState, setWalletState] = useState<WalletState>({
     connected: false,
     address: null,
@@ -165,7 +166,7 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
 
   const walletAvailable = isWalletAvailable();
   const isCorrectNetwork = walletState.chainId === selectedChainId;
-  const canDeploy = walletState.connected && isCorrectNetwork && deployStatus !== 'deploying' && deployStatus !== 'confirming';
+  const canDeploy = walletState.connected && isCorrectNetwork && deployStatus !== 'deploying' && deployStatus !== 'confirming' && !usingDemoAddress;
   const currentNetworkConfig = walletState.chainId ? getNetworkConfig(walletState.chainId) : null;
   const selectedNetworkConfig = getNetworkConfig(selectedChainId);
 
@@ -174,6 +175,35 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
       <h3 className="text-lg font-semibold mb-4 text-primary-themed">Deploy Safe</h3>
 
       <div className="space-y-4">
+        {/* Demo Address Warning - Block Deployment */}
+        {usingDemoAddress && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <svg className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="space-y-2">
+                <p className="text-red-700 font-semibold">Cannot Deploy with Demo Address</p>
+                <p className="text-red-600 text-sm">
+                  You are using a <strong>demo placeholder address</strong> as the Safe owner.
+                  This address is for testing the mining feature only.
+                </p>
+                <p className="text-red-600 text-sm">
+                  <strong>To deploy:</strong>
+                </p>
+                <ol className="text-red-600 text-sm list-decimal list-inside space-y-1 ml-2">
+                  <li>Connect your wallet (recommended)</li>
+                  <li>Or manually enter your real owner address(es)</li>
+                  <li>Mine again with your actual owner address</li>
+                </ol>
+                <p className="text-red-500 text-xs mt-2 italic">
+                  The mined salt only works with the specific owner address(es) used during mining.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Wallet Connection */}
         {!walletAvailable ? (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-sm space-y-2">
@@ -242,7 +272,7 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
         )}
 
         {/* Deploy Button */}
-        {walletState.connected && (
+        {walletState.connected && !usingDemoAddress && (
           <button
             onClick={handleDeploy}
             disabled={!canDeploy}
@@ -267,6 +297,17 @@ export default function DeployPanel({ bestAddress, bestNonce, initializer, selec
             ) : (
               `Deploy Safe on ${selectedNetworkConfig?.name || 'Network'}`
             )}
+          </button>
+        )}
+
+        {/* Disabled Deploy Button for Demo Address */}
+        {usingDemoAddress && (
+          <button
+            disabled
+            className="btn-primary w-full opacity-50 cursor-not-allowed"
+            title="Cannot deploy with demo address"
+          >
+            🚫 Deployment Blocked (Demo Address)
           </button>
         )}
 

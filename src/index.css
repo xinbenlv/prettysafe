@@ -308,3 +308,109 @@
   color: var(--color-text-secondary);
   font-style: italic;
 }
+
+/* Mobile-first responsive optimizations for iPhone SE (375px) and smaller */
+@media (max-width: 400px) {
+  /* Reduce card padding on very small screens */
+  .card {
+    padding: 1rem;
+  }
+
+  /* Smaller font sizes for stats */
+  .stat-value {
+    font-size: 1rem !important;
+  }
+
+  /* Compact network buttons */
+  .network-btn {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  .network-btn .network-logo {
+    width: 1rem !important;
+    height: 1rem !important;
+  }
+
+  /* Smaller heading text */
+  .heading-responsive {
+    font-size: 1.5rem !important;
+  }
+
+  /* More compact spacing */
+  .space-y-6 {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(1rem * calc(1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(1rem * var(--tw-space-y-reverse));
+  }
+}
+
+/* Extra small screens (iPhone 5/SE 1st gen - 320px) */
+@media (max-width: 350px) {
+  .card {
+    padding: 0.75rem;
+    border-radius: 1rem;
+  }
+
+  .btn-primary {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
+
+  /* Stack mining stats vertically on very small screens */
+  .mining-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Floating button animations */
+@keyframes slide-in-from-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-out-to-bottom {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+.animate-in {
+  animation: slide-in-from-bottom 0.3s ease-out;
+}
+
+.slide-in-from-bottom-4 {
+  --tw-enter-translate-y: 1rem;
+}
+
+/* Smooth transition for button visibility change */
+@media (min-width: 640px) {
+  .floating-button-container {
+    animation: slide-out-to-bottom 0.3s ease-in forwards;
+  }
+}
+
+/* Pulse animation for mining state */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 4px 14px 0 rgba(28, 209, 125, 0.39);
+  }
+  50% {
+    box-shadow: 0 6px 20px 0 rgba(28, 209, 125, 0.6);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
