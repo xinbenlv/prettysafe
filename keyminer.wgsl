@@ -606,24 +606,49 @@ fn keccak256_64_pubkey(input: array<u32, 16>) -> array<u32, 8> {
 
 // ═══════════════════════════════════════════════════════════════════════
 // Section 4: Buffers and Main Entry Point
+//
+// Optimization: CPU precomputes base_point = (base_key + offset) * G and
+// a 3-level table of G multiples. Each GPU thread does at most 3 EC point
+// additions from the table instead of a full 256-bit scalar multiply.
+//
+// Table layout (1104 affine points, 16 u32s each):
+//   [0..63]      Table A: i*G              (i = local_invocation_id.x)
+//   [64..1087]   Table B: (i*64)*G         (i = workgroup_id.x, 0..1023)
+//   [1088..1103] Table C: (i*65536)*G      (i = workgroup_id.y, 0..15)
+//
+// thread_id = gid.x + gid.y * 65536
+// public_key = base_point + A[gid.x & 63] + B[gid.x >> 6] + C[gid.y]
+// private_key = base_scalar + thread_id
 // ═══════════════════════════════════════════════════════════════════════
 
 struct Params {
-    base_key_lo: vec4<u32>,       // key limbs [0..3]
-    base_key_hi: vec4<u32>,       // key limbs [4..7]
-    iteration_offset_lo: u32,
-    iteration_offset_hi: u32,
-    padding1: u32,
-    padding2: u32,
+    base_x_lo: vec4<u32>,       // base point affine x, limbs 0-3
+    base_x_hi: vec4<u32>,       // base point affine x, limbs 4-7
+    base_y_lo: vec4<u32>,       // base point affine y, limbs 0-3
+    base_y_hi: vec4<u32>,       // base point affine y, limbs 4-7
+    base_scalar_lo: vec4<u32>,  // private key scalar, limbs 0-3
+    base_scalar_hi: vec4<u32>,  // private key scalar, limbs 4-7
 }
 
-fn get_base_key() -> array<u32, 8> {
-    var k: array<u32, 8>;
-    k[0] = params.base_key_lo.x; k[1] = params.base_key_lo.y;
-    k[2] = params.base_key_lo.z; k[3] = params.base_key_lo.w;
-    k[4] = params.base_key_hi.x; k[5] = params.base_key_hi.y;
-    k[6] = params.base_key_hi.z; k[7] = params.base_key_hi.w;
-    return k;
+fn get_base_x() -> array<u32, 8> {
+    var r: array<u32, 8>;
+    r[0]=params.base_x_lo.x; r[1]=params.base_x_lo.y; r[2]=params.base_x_lo.z; r[3]=params.base_x_lo.w;
+    r[4]=params.base_x_hi.x; r[5]=params.base_x_hi.y; r[6]=params.base_x_hi.z; r[7]=params.base_x_hi.w;
+    return r;
+}
+
+fn get_base_y() -> array<u32, 8> {
+    var r: array<u32, 8>;
+    r[0]=params.base_y_lo.x; r[1]=params.base_y_lo.y; r[2]=params.base_y_lo.z; r[3]=params.base_y_lo.w;
+    r[4]=params.base_y_hi.x; r[5]=params.base_y_hi.y; r[6]=params.base_y_hi.z; r[7]=params.base_y_hi.w;
+    return r;
+}
+
+fn get_base_scalar() -> array<u32, 8> {
+    var r: array<u32, 8>;
+    r[0]=params.base_scalar_lo.x; r[1]=params.base_scalar_lo.y; r[2]=params.base_scalar_lo.z; r[3]=params.base_scalar_lo.w;
+    r[4]=params.base_scalar_hi.x; r[5]=params.base_scalar_hi.y; r[6]=params.base_scalar_hi.z; r[7]=params.base_scalar_hi.w;
+    return r;
 }
 
 struct Results {
@@ -645,6 +670,25 @@ struct Results {
 
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var<storage, read_write> results: Results;
+@group(0) @binding(2) var<storage, read> ec_table: array<u32>;
+
+// Load affine x from table at index idx
+fn load_table_x(idx: u32) -> array<u32, 8> {
+    var r: array<u32, 8>;
+    let base = idx * 16u;
+    r[0]=ec_table[base]; r[1]=ec_table[base+1u]; r[2]=ec_table[base+2u]; r[3]=ec_table[base+3u];
+    r[4]=ec_table[base+4u]; r[5]=ec_table[base+5u]; r[6]=ec_table[base+6u]; r[7]=ec_table[base+7u];
+    return r;
+}
+
+// Load affine y from table at index idx
+fn load_table_y(idx: u32) -> array<u32, 8> {
+    var r: array<u32, 8>;
+    let base = idx * 16u + 8u;
+    r[0]=ec_table[base]; r[1]=ec_table[base+1u]; r[2]=ec_table[base+2u]; r[3]=ec_table[base+3u];
+    r[4]=ec_table[base+4u]; r[5]=ec_table[base+5u]; r[6]=ec_table[base+6u]; r[7]=ec_table[base+7u];
+    return r;
+}
 
 fn addr_is_smaller(new_addr: array<u32, 5>, b0: u32, b1: u32, b2: u32, b3: u32, b4: u32) -> bool {
     let n0=swap_endian_u32(new_addr[0]); let n1=swap_endian_u32(new_addr[1]);
@@ -661,14 +705,12 @@ fn addr_is_smaller(new_addr: array<u32, 5>, b0: u32, b1: u32, b2: u32, b3: u32, 
     return false;
 }
 
-fn u256_add_u64(a: array<u32, 8>, lo: u32, hi: u32) -> array<u32, 8> {
+fn u256_add_u32(a: array<u32, 8>, v: u32) -> array<u32, 8> {
     var r: array<u32, 8>;
-    let t0 = add32c(a[0], lo, 0u);
+    let t0 = add32c(a[0], v, 0u);
     r[0] = t0.x;
-    let t1 = add32c(a[1], hi, t0.y);
-    r[1] = t1.x;
-    var c = t1.y;
-    for (var i = 2u; i < 8u; i++) {
+    var c = t0.y;
+    for (var i = 1u; i < 8u; i++) {
         let t = add32c(a[i], 0u, c);
         r[i] = t.x;
         c = t.y;
@@ -678,23 +720,47 @@ fn u256_add_u64(a: array<u32, 8>, lo: u32, hi: u32) -> array<u32, 8> {
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    let thread_id = gid.x + gid.y * 65535u * 64u;
+    // Decompose thread ID for 3-level table lookup
+    let a_idx = gid.x & 63u;        // local_invocation_id.x: 0..63
+    let b_idx = gid.x >> 6u;        // workgroup_id.x: 0..1023
+    let c_idx = gid.y;              // workgroup_id.y: 0..15
+    let thread_id = gid.x + gid.y * 65536u;
 
-    var key = get_base_key();
-    key = u256_add_u64(key, params.iteration_offset_lo, params.iteration_offset_hi);
-    key = u256_add_u64(key, thread_id, 0u);
+    // Start with base_point (precomputed on CPU) in Jacobian coords
+    var pt = ECPoint(get_base_x(), get_base_y(), U256_ONE);
 
-    let pub_jac = ec_mul(key);
-    let pub_affine = ec_to_affine(pub_jac);
+    // Add table A entry (i*G for thread-local offset)
+    if (a_idx != 0u) {
+        pt = ec_add_mixed(pt, load_table_x(a_idx), load_table_y(a_idx));
+    }
+
+    // Add table B entry (i*64*G for workgroup x offset)
+    if (b_idx != 0u) {
+        let bi = 64u + b_idx;
+        pt = ec_add_mixed(pt, load_table_x(bi), load_table_y(bi));
+    }
+
+    // Add table C entry (i*65536*G for workgroup y offset)
+    if (c_idx != 0u) {
+        let ci = 1088u + c_idx;
+        pt = ec_add_mixed(pt, load_table_x(ci), load_table_y(ci));
+    }
+
+    // Convert to affine (one mod_inv per thread)
+    let pub_affine = ec_to_affine(pt);
     let hash = keccak256_64_pubkey(pub_affine);
 
-    // Address = last 20 bytes of 32-byte hash = hash[3..7]
+    // Address = last 20 bytes of 32-byte hash
     var addr: array<u32, 5>;
     addr[0] = hash[3];
     addr[1] = hash[4];
     addr[2] = hash[5];
     addr[3] = hash[6];
     addr[4] = hash[7];
+
+    // Private key = base_scalar + thread_id
+    var key = get_base_scalar();
+    key = u256_add_u32(key, thread_id);
 
     let best0 = atomicLoad(&results.addr0);
     let best1 = atomicLoad(&results.addr1);

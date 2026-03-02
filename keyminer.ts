@@ -4,6 +4,9 @@
  * Uses WebGPU (via bun-webgpu) to brute-force private keys on GPU.
  * Pipeline: private_key → secp256k1(G) → keccak256 → address
  *
+ * Optimization: CPU precomputes base_point and a 3-level table of G multiples.
+ * GPU threads do at most 3 EC additions + 1 mod_inv instead of full scalar multiply.
+ *
  * Usage:
  *   bun run keyminer.ts [--start-key 0x...] [--leading-zeros 8] [--no-resume]
  *
@@ -13,7 +16,7 @@
 
 import { join } from "path";
 import { parseArgs } from "util";
-import { Wallet } from "ethers";
+import { Wallet, SigningKey } from "ethers";
 
 // ── CLI args ──────────────────────────────────────────────────────────
 const { values } = parseArgs({
@@ -44,12 +47,13 @@ if (values["start-key"]) {
   startKeyHex = "0x" + randomPrefix + "0".repeat(32);
 }
 
-// Parse start key into 8 u32 limbs (little-endian)
+// ── Bignum helpers ────────────────────────────────────────────────────
+
+// Parse 256-bit hex → 8 little-endian u32 limbs
 function hexToLimbs(hex: string): Uint32Array {
   const clean = hex.replace("0x", "").padStart(64, "0");
   const limbs = new Uint32Array(8);
   for (let i = 0; i < 8; i++) {
-    // Limb 0 = least significant 4 bytes
     const byteOffset = (7 - i) * 8;
     limbs[i] = parseInt(clean.slice(byteOffset, byteOffset + 8), 16) >>> 0;
   }
@@ -64,16 +68,6 @@ function limbsToHex(limbs: Uint32Array | number[]): string {
   return hex;
 }
 
-function swapEndian(x: number): number {
-  return (
-    (((x & 0xff) << 24) |
-      ((x & 0xff00) << 8) |
-      ((x & 0xff0000) >>> 8) |
-      ((x & 0xff000000) >>> 24)) >>>
-    0
-  );
-}
-
 function countLeadingZeroHex(address: string): number {
   const clean = address.replace("0x", "").toLowerCase();
   let count = 0;
@@ -82,6 +76,27 @@ function countLeadingZeroHex(address: string): number {
     else break;
   }
   return count;
+}
+
+function bigintToHex64(n: bigint): string {
+  return "0x" + n.toString(16).padStart(64, "0");
+}
+
+// ── EC point precomputation using ethers ──────────────────────────────
+
+// Returns affine point (x, y) as little-endian u32 limbs, or null for identity
+function computeECPoint(scalar: bigint): { x: Uint32Array; y: Uint32Array } | null {
+  if (scalar === 0n) return null;
+  // Ensure scalar is within secp256k1 order
+  const n = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
+  const s = ((scalar % n) + n) % n;
+  if (s === 0n) return null;
+  const sk = new SigningKey(bigintToHex64(s));
+  const pub = sk.publicKey; // "0x04" + 64 hex x + 64 hex y
+  return {
+    x: hexToLimbs("0x" + pub.slice(4, 68)),
+    y: hexToLimbs("0x" + pub.slice(68, 132)),
+  };
 }
 
 // ── Formatting helpers ────────────────────────────────────────────────
@@ -102,7 +117,6 @@ function formatHashes(n: number): string {
 }
 
 // ── Output file ───────────────────────────────────────────────────────
-// Filename includes start key prefix so parallel runs with different ranges don't collide
 const keyPrefix = startKeyHex.replace("0x", "").slice(0, 16);
 const outPath = join(import.meta.dir, "tmp", `keyminer-${keyPrefix}.json`);
 
@@ -210,20 +224,63 @@ if (!adapter) {
 const device = await adapter.requestDevice();
 console.log(`GPU: ${adapter.info.vendor} ${adapter.info.architecture}`);
 
+// ── Precompute EC table ──────────────────────────────────────────────
+// 3-level table of G multiples for fast GPU lookups:
+//   Table A [0..63]:      i * G           (local thread offset)
+//   Table B [64..1087]:   i * 64 * G      (workgroup x offset)
+//   Table C [1088..1103]: i * 65536 * G   (workgroup y offset)
+// Total: 1104 affine points, each 16 u32s = 70,656 bytes
+
+console.log("Precomputing EC point table...");
+const TABLE_A_SIZE = 64;    // matches workgroup_size
+const TABLE_B_SIZE = 1024;  // matches DISPATCH_X
+const TABLE_C_SIZE = 16;    // matches DISPATCH_Y
+const TABLE_TOTAL = TABLE_A_SIZE + TABLE_B_SIZE + TABLE_C_SIZE; // 1104
+
+const tableData = new Uint32Array(TABLE_TOTAL * 16); // 16 u32s per point
+
+function writePointToTable(idx: number, pt: { x: Uint32Array; y: Uint32Array } | null) {
+  const base = idx * 16;
+  if (pt === null) {
+    // Identity: all zeros
+    for (let i = 0; i < 16; i++) tableData[base + i] = 0;
+  } else {
+    for (let i = 0; i < 8; i++) tableData[base + i] = pt.x[i];
+    for (let i = 0; i < 8; i++) tableData[base + 8 + i] = pt.y[i];
+  }
+}
+
+// Table A: i * G for i = 0..63
+for (let i = 0; i < TABLE_A_SIZE; i++) {
+  writePointToTable(i, computeECPoint(BigInt(i)));
+}
+
+// Table B: (i * 64) * G for i = 0..1023
+for (let i = 0; i < TABLE_B_SIZE; i++) {
+  writePointToTable(TABLE_A_SIZE + i, computeECPoint(BigInt(i) * 64n));
+}
+
+// Table C: (i * 65536) * G for i = 0..15
+for (let i = 0; i < TABLE_C_SIZE; i++) {
+  writePointToTable(TABLE_A_SIZE + TABLE_B_SIZE + i, computeECPoint(BigInt(i) * 65536n));
+}
+
+console.log(`  ${TABLE_TOTAL} points precomputed (${(tableData.byteLength / 1024).toFixed(0)} KB)`);
+
 // ── Shader + buffers ──────────────────────────────────────────────────
 const shaderCode = await Bun.file(
   join(import.meta.dir, "keyminer.wgsl")
 ).text();
 const shaderModule = device.createShaderModule({ code: shaderCode });
 
-// Params buffer: base_key (8 u32) + offset_lo (u32) + offset_hi (u32) + pad (2 u32) = 48 bytes
-const PARAMS_SIZE = 48;
+// Params: 6 vec4<u32> = 96 bytes (base_x, base_y, base_scalar)
+const PARAMS_SIZE = 96;
 const paramsBuffer = device.createBuffer({
   size: PARAMS_SIZE,
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 
-// Results buffer: addr (5 u32) + key (8 u32) + found (1 u32) = 14 u32 = 56 bytes
+// Results: 14 u32 = 56 bytes
 const RESULTS_SIZE = 56;
 const resultsBuffer = device.createBuffer({
   size: RESULTS_SIZE,
@@ -236,6 +293,13 @@ const readbackBuffer = device.createBuffer({
   usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
 });
 
+// EC table buffer (storage, read-only)
+const tableBuffer = device.createBuffer({
+  size: tableData.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+device.queue.writeBuffer(tableBuffer, 0, tableData);
+
 const pipeline = device.createComputePipeline({
   layout: "auto",
   compute: { module: shaderModule, entryPoint: "main" },
@@ -246,16 +310,17 @@ const bindGroup = device.createBindGroup({
   entries: [
     { binding: 0, resource: { buffer: paramsBuffer } },
     { binding: 1, resource: { buffer: resultsBuffer } },
+    { binding: 2, resource: { buffer: tableBuffer } },
   ],
 });
 
 // ── GPU dispatch ──────────────────────────────────────────────────────
 const WORKGROUP_SIZE = 64;
-const DISPATCH_X = 1024;
-const DISPATCH_Y = 4;
-const ITEMS_PER_DISPATCH = WORKGROUP_SIZE * DISPATCH_X * DISPATCH_Y; // ~262K
+const DISPATCH_X = TABLE_B_SIZE;  // 1024
+const DISPATCH_Y = TABLE_C_SIZE;  // 16
+const ITEMS_PER_DISPATCH = WORKGROUP_SIZE * DISPATCH_X * DISPATCH_Y; // 1,048,576
 
-const baseKeyLimbs = hexToLimbs(startKeyHex);
+const startKeyBigInt = BigInt(startKeyHex);
 
 function writeGpuBest() {
   const initResults = new Uint32Array(14);
@@ -267,14 +332,19 @@ function writeGpuBest() {
 async function runOneDispatch(offset: number): Promise<Uint32Array> {
   writeGpuBest();
 
-  const paramsData = new Uint32Array(12);
-  // base_key
-  for (let i = 0; i < 8; i++) paramsData[i] = baseKeyLimbs[i];
-  // iteration offset (64-bit)
-  paramsData[8] = offset >>> 0;
-  paramsData[9] = Math.floor(offset / 0x100000000) >>> 0;
-  paramsData[10] = 0;
-  paramsData[11] = 0;
+  // CPU computes base_point = (startKey + offset) * G
+  const baseScalar = startKeyBigInt + BigInt(offset);
+  const basePoint = computeECPoint(baseScalar);
+
+  // Write params: base_x (8), base_y (8), base_scalar (8) = 24 u32s = 96 bytes
+  const paramsData = new Uint32Array(24);
+  if (basePoint) {
+    for (let i = 0; i < 8; i++) paramsData[i] = basePoint.x[i];
+    for (let i = 0; i < 8; i++) paramsData[8 + i] = basePoint.y[i];
+  }
+  // base_scalar
+  const scalarLimbs = hexToLimbs(bigintToHex64(baseScalar));
+  for (let i = 0; i < 8; i++) paramsData[16 + i] = scalarLimbs[i];
   device.queue.writeBuffer(paramsBuffer, 0, paramsData);
 
   const commandEncoder = device.createCommandEncoder();
@@ -328,7 +398,7 @@ const warmupElapsed = (performance.now() - warmupStart) / 1000;
 const warmupKeys = warmupIter * ITEMS_PER_DISPATCH;
 const measuredRate = warmupKeys / warmupElapsed;
 
-console.log(`Rate: ${(measuredRate / 1e3).toFixed(1)} K keys/s\n`);
+console.log(`Rate: ${(measuredRate / 1e6).toFixed(2)} M keys/s\n`);
 
 // ── Print expected time table ─────────────────────────────────────────
 console.log(
@@ -379,11 +449,8 @@ while (!stopping) {
   const found = resultData[13] === 1;
 
   if (found) {
-    // Extract key limbs (indices 5-12)
     const keyLimbs = resultData.slice(5, 13);
     const keyHex = limbsToHex(Array.from(keyLimbs));
-
-    // CPU verification
     const { address: cpuAddress, valid } = verifyKeyAddress(keyHex);
 
     if (valid) {
@@ -393,8 +460,7 @@ while (!stopping) {
       if (addrBigInt < bestAddress) {
         bestAddress = addrBigInt;
 
-        totalKeys =
-          (currentOffset - resumedOffset + ITEMS_PER_DISPATCH);
+        totalKeys = currentOffset - resumedOffset + ITEMS_PER_DISPATCH;
         const entry: ResultEntry = {
           privateKey: keyHex,
           address: cpuAddress,
@@ -446,7 +512,6 @@ while (!stopping) {
   keysSinceLock += ITEMS_PER_DISPATCH;
   totalKeys = currentOffset - resumedOffset;
 
-  // Status line
   const now = performance.now();
   const elapsed = (now - startTime) / 1000;
   const rate = totalKeys / elapsed;
@@ -459,7 +524,7 @@ while (!stopping) {
   const probPercent = Math.min(99.999, probFound * 100);
 
   process.stdout.write(
-    `\r  ${formatDuration(elapsed)} | ${(rate / 1e3).toFixed(1)} K/s | ${formatHashes(totalKeys)} keys | best: ${currentBestZeros}z` +
+    `\r  ${formatDuration(elapsed)} | ${(rate / 1e6).toFixed(2)} M/s | ${formatHashes(totalKeys)} keys | best: ${currentBestZeros}z` +
       ` | ${lockedTargetZeros}z: ${probPercent.toFixed(1)}% ETA: ${formatDuration(remaining90sec)}   `
   );
 }
