@@ -10,7 +10,9 @@
     "benchmark": "bun run benchmark.ts",
     "test": "bun run test.ts",
     "test:derivation": "npx tsx src/lib/test-derivation.ts",
-    "mine": "bun run mine.ts"
+    "mine": "bun run mine.ts",
+    "keyminer": "bun run keyminer.ts",
+    "keyminer:test": "bun run keyminer-test.ts"
   },
   "dependencies": {
     "@metamask/jazzicon": "^2.0.0",
