@@ -56,6 +56,9 @@ const config: SafeConfig = { owners, threshold: safeThreshold };
 // ── Formatting helpers ────────────────────────────────────────────────
 function formatDuration(seconds: number): string {
   if (!isFinite(seconds) || seconds < 0) return "---";
+  if (seconds < 1e-6) return `${(seconds * 1e9).toFixed(1)}ns`;
+  if (seconds < 1e-3) return `${(seconds * 1e6).toFixed(1)}µs`;
+  if (seconds < 1) return `${(seconds * 1e3).toFixed(1)}ms`;
   if (seconds < 60) return `${seconds.toFixed(0)}s`;
   if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`;
   if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
@@ -298,17 +301,27 @@ const measuredHashrate = warmupHashes / warmupElapsed;
 console.log(`Hashrate: ${(measuredHashrate / 1e6).toFixed(1)} MH/s\n`);
 
 // ── Print expected time table for 8–14 leading zeros ─────────────────
-console.log(`  Zeros | Expected Hashes | Expected Time  | 90% Chance Hashes | 90% Chance Time`);
-console.log(`  ------+-----------------+----------------+-------------------+----------------`);
+const SYNDICATE_ATTACK_HASHRATE = 100 * 336e12;  // 100 × Antminer S21 (336 TH/s each) [1]
+const NATION_STATE_ATTACK_HASHRATE = 1e21;        // ~1 ZH/s, Bitcoin ATH 7-day avg hashrate, Sep 2025 [2]
+
+console.log(`  Zeros | Expected Hashes | Expected Time  | 90% Chance Hashes | 90% Chance Time | Normal Attack (z+6) | Syndicate Attack (z+8) [1] | Nation-State Attack (z+8) [2]`);
+console.log(`  ------+-----------------+----------------+-------------------+-----------------+---------------------+----------------------------+------------------------------`);
 for (let z = 8; z <= 14; z++) {
   const expH = expectedHashesForNZeros(z);
   const expT = expH / measuredHashrate;
   const h90 = hashesForNZeros(z);
   const t90 = h90 / measuredHashrate;
+  const h90plus6 = hashesForNZeros(z + 6);
+  const tNormal = h90plus6 / measuredHashrate;
+  const h90plus8 = hashesForNZeros(z + 8);
+  const tSyndicate = h90plus8 / SYNDICATE_ATTACK_HASHRATE;
+  const tNationState = h90plus8 / NATION_STATE_ATTACK_HASHRATE;
   console.log(
-    `  ${String(z).padStart(5)} | ${formatHashes(expH).padStart(15)} | ${formatDuration(expT).padStart(14)} | ${formatHashes(h90).padStart(17)} | ${formatDuration(t90).padStart(14)}`
+    `  ${String(z).padStart(5)} | ${formatHashes(expH).padStart(15)} | ${formatDuration(expT).padStart(14)} | ${formatHashes(h90).padStart(17)} | ${formatDuration(t90).padStart(15)} | ${formatDuration(tNormal).padStart(19)} | ${formatDuration(tSyndicate).padStart(26)} | ${formatDuration(tNationState).padStart(28)}`
   );
 }
+console.log(`\n  [1] Syndicate Attack: 100 SOTA miners (Antminer S21, 336 TH/s each) = ${formatHashes(SYNDICATE_ATTACK_HASHRATE)}H/s`);
+console.log(`  [2] Nation-State Attack: ~1 ZH/s, Bitcoin ATH 7-day avg hashrate (Sep 2025)`);
 console.log();
 
 // ── Mining state ─────────────────────────────────────────────────────
