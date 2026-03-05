@@ -431,12 +431,13 @@ export function getSafeAppLink(address: Address, chainId: number): string {
 /**
  * Get list of enabled networks for UI (only networks where mining/deployment works).
  */
-export function getEnabledNetworks(): Array<{ chainId: number; name: string }> {
+export function getEnabledNetworks(): Array<{ chainId: number; name: string; testnet?: boolean }> {
   return Object.entries(SUPPORTED_NETWORKS)
     .filter(([, config]) => config.enabled)
     .map(([chainId, config]) => ({
       chainId: parseInt(chainId),
       name: config.name,
+      testnet: config.testnet,
     }));
 }
 

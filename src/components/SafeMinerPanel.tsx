@@ -4,6 +4,7 @@ import { useSafeMiner } from '../hooks/useSafeMiner';
 import { countLeadingZeros, deriveSafeAddress, type SafeConfig } from '../lib/safe-encoder';
 import { getEnabledNetworks, getComingSoonNetworks, connectWallet, getWalletState, isWalletAvailable, type WalletState } from '../lib/wallet';
 import { PROXY_FACTORY, PROXY_CREATION_CODE_HASH } from '../lib/gnosis-constants';
+import { lookupSafe, type SafeLookupResult, type LookupError } from '../lib/safe-lookup';
 import DeployPanel from './DeployPanel';
 import ConfirmModal from './ConfirmModal';
 import Jazzicon from './Jazzicon';
@@ -15,12 +16,12 @@ export const DEFAULT_DEMO_OWNER = '0x0123456789abcdef0123456789abcdef01234567' a
 function EthereumLogo({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 256 417" xmlns="http://www.w3.org/2000/svg">
-      <path fill="#343434" d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/>
-      <path fill="#8C8C8C" d="M127.962 0L0 212.32l127.962 75.639V154.158z"/>
-      <path fill="#3C3C3B" d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.6L256 236.587z"/>
-      <path fill="#8C8C8C" d="M127.962 416.905v-104.72L0 236.585z"/>
-      <path fill="#141414" d="M127.961 287.958l127.96-75.637-127.96-58.162z"/>
-      <path fill="#393939" d="M0 212.32l127.96 75.638v-133.8z"/>
+      <path fill="#627EEA" d="M127.961 0l-2.795 9.5v275.668l2.795 2.79 127.962-75.638z"/>
+      <path fill="#C0CCF7" d="M127.962 0L0 212.32l127.962 75.639V154.158z"/>
+      <path fill="#4A6BE0" d="M127.961 312.187l-1.575 1.92v98.199l1.575 4.6L256 236.587z"/>
+      <path fill="#C0CCF7" d="M127.962 416.905v-104.72L0 236.585z"/>
+      <path fill="#3558D6" d="M127.961 287.958l127.96-75.637-127.96-58.162z"/>
+      <path fill="#8198EE" d="M0 212.32l127.96 75.638v-133.8z"/>
     </svg>
   );
 }
@@ -34,12 +35,75 @@ function BaseLogo({ className = "w-5 h-5" }: { className?: string }) {
   );
 }
 
+function GnosisLogo({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="16" fill="#04795B"/>
+      <path fill="white" d="M16 7a9 9 0 100 18A9 9 0 0016 7zm0 2a7 7 0 110 14A7 7 0 0116 9zm0 2a5 5 0 100 10A5 5 0 0016 11z"/>
+    </svg>
+  );
+}
+
+function ArbitrumLogo({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="16" fill="#213147"/>
+      <path fill="#12AAFF" d="M16 6L7 21h3.5l5.5-9.5L21.5 21H25z"/>
+      <path fill="#fff" d="M13.5 21h5l-2.5-4.3z"/>
+    </svg>
+  );
+}
+
+function OptimismLogo({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="16" fill="#FF0420"/>
+      <text x="16" y="21" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" fontFamily="sans-serif">OP</text>
+    </svg>
+  );
+}
+
+function PolygonLogo({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="16" cy="16" r="16" fill="#8247E5"/>
+      <path fill="white" d="M21.2 12.8l-2.4-1.4c-.3-.2-.7-.2-1 0l-2.4 1.4-2.4 1.4c-.3.2-.5.5-.5.8v2.8c0 .3.2.6.5.8l2.4 1.4c.3.2.7.2 1 0l2.4-1.4 2.4-1.4c.3-.2.5-.5.5-.8V14c0-.4-.2-.7-.5-.9zm-5.2 5.4l-1.9-1.1v-2.2l1.9 1.1v2.2zm.5-3l-1.9-1.1 1.9-1.1 1.9 1.1-1.9 1.1zm2.4 1.9l-1.9 1.1v-2.2l1.9-1.1v2.2z"/>
+    </svg>
+  );
+}
+
+function NetworkLogoWithBadge({ chainId, testnet, className = "w-5 h-5" }: { chainId: number; testnet?: boolean; className?: string }) {
+  return (
+    <span className="relative inline-flex flex-shrink-0">
+      <span style={testnet ? { filter: 'grayscale(100%)' } : undefined}>
+        <NetworkLogo chainId={chainId} className={className} />
+      </span>
+      {testnet && (
+        <span className="absolute -bottom-1 -right-1.5 text-[9px] leading-none">🧪</span>
+      )}
+    </span>
+  );
+}
+
 function NetworkLogo({ chainId, className = "w-5 h-5" }: { chainId: number; className?: string }) {
   switch (chainId) {
     case 1:
       return <EthereumLogo className={className} />;
     case 8453:
       return <BaseLogo className={className} />;
+    case 84532: // Base Sepolia
+      return <BaseLogo className={className} />;
+    case 42161:
+      return <ArbitrumLogo className={className} />;
+    case 10:
+      return <OptimismLogo className={className} />;
+    case 137:
+    case 80001: // Mumbai
+      return <PolygonLogo className={className} />;
+    case 100:
+      return <GnosisLogo className={className} />;
+    case 11155111: // Sepolia
+      return <EthereumLogo className={className} />;
     default:
       return <div className={`${className} bg-gray-500 rounded-full`} />;
   }
@@ -155,6 +219,8 @@ export default function SafeMinerPanel() {
   const urlOwners = urlParams?.get('owners') ?? '';
   const urlThreshold = urlParams?.get('threshold');
   const urlSalt = urlParams?.get('salt') ?? '';
+  const urlImport = urlParams?.get('import') ?? '';
+  const urlImportChain = urlParams?.get('importChain') ?? '';
 
   const [ownersText, setOwnersText] = useState(urlOwners ? urlOwners.split(',').join('\n') : '');
   const [threshold, setThreshold] = useState(urlThreshold ? parseInt(urlThreshold, 10) || 1 : 1);
@@ -171,6 +237,16 @@ export default function SafeMinerPanel() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [showDemoAddressModal, setShowDemoAddressModal] = useState(false);
   const [usingDemoAddress, setUsingDemoAddress] = useState(false);
+
+  // Import Existing Safe state
+  const [showImportModal, setShowImportModal] = useState(!!urlImport);
+  const [importAddress, setImportAddress] = useState(urlImport);
+  const [importChainId, setImportChainId] = useState(
+    urlImportChain ? parseInt(urlImportChain, 10) || 1 : 1
+  );
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<SafeLookupResult | null>(null);
 
   // Track the locked target zeros for 90% countdown
   // Only updates when: 1) we find more zeros, or 2) we've done 50%+ of predicted hashes
@@ -201,6 +277,47 @@ export default function SafeMinerPanel() {
     };
     checkWallet();
   }, []);
+
+  // Handle import existing Safe
+  const handleImport = useCallback(async () => {
+    const trimmed = importAddress.trim();
+    if (!trimmed || !isAddress(trimmed)) {
+      setImportError('Please enter a valid Ethereum address');
+      return;
+    }
+
+    setImportLoading(true);
+    setImportError(null);
+    setImportResult(null);
+
+    try {
+      const result = await lookupSafe(getAddress(trimmed) as Address, importChainId);
+      setImportResult(result);
+
+      if (result.compatible && result.saltNonce !== null) {
+        // Pre-fill the miner panel
+        setOwnersText(result.owners.join('\n'));
+        setThreshold(result.threshold);
+        const hex = result.saltNonce.toString(16);
+        setSaltInput('0x' + hex);
+        // Close modal on success
+        setShowImportModal(false);
+      }
+    } catch (error) {
+      const lookupErr = error as LookupError;
+      setImportError(lookupErr.message || 'An unexpected error occurred');
+    } finally {
+      setImportLoading(false);
+    }
+  }, [importAddress, importChainId]);
+
+  // Auto-trigger import from URL params (open modal and run lookup)
+  useEffect(() => {
+    if (urlImport && isAddress(urlImport)) {
+      setShowImportModal(true);
+      handleImport();
+    }
+  }, []); // Only on mount
 
   // Handle wallet connection
   const handleConnectWallet = useCallback(async () => {
@@ -611,6 +728,138 @@ export default function SafeMinerPanel() {
         )}
       </div>
 
+      {/* Import Existing Safe Button */}
+      <button
+        type="button"
+        onClick={() => { setShowImportModal(true); setImportError(null); setImportResult(null); }}
+        className="w-full card p-4 flex items-center gap-3 hover:border-primary/50 transition-all cursor-pointer text-left border border-surface"
+      >
+        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+        </div>
+        <div>
+          <p className="font-medium text-primary-themed">Import Existing Safe</p>
+          <p className="text-secondary-themed text-xs">Deploy the same address on another chain</p>
+        </div>
+      </button>
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowImportModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="relative rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200"
+            style={{ backgroundColor: 'var(--color-bg-card)' }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-primary-themed">Import Existing Safe</h3>
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="p-1 rounded-lg text-secondary-themed hover:text-primary-themed hover:bg-surface-inner transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-secondary-themed text-sm">
+              Enter a Safe address to import its owners, threshold, and salt — then deploy it on another chain.
+            </p>
+
+            {/* Source chain selector */}
+            <div>
+              <label className="block text-primary-themed font-medium mb-2 text-sm">Source Chain</label>
+              <div className="flex flex-wrap gap-2">
+                {enabledNetworks.map((network: { chainId: number; name: string; testnet?: boolean }) => (
+                  <button
+                    key={network.chainId}
+                    type="button"
+                    onClick={() => setImportChainId(network.chainId)}
+                    disabled={importLoading}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border transition-all text-sm ${
+                      importChainId === network.chainId
+                        ? 'bg-primary/10 border-primary text-primary-themed'
+                        : 'bg-button-inactive border-surface text-secondary-themed hover:border-primary/50'
+                    } ${importLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    <NetworkLogoWithBadge chainId={network.chainId} testnet={network.testnet} className="w-4 h-4" />
+                    <span>{network.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Address input */}
+            <div>
+              <label className="block text-primary-themed font-medium mb-2 text-sm">Safe Address</label>
+              <input
+                type="text"
+                value={importAddress}
+                onChange={(e) => {
+                  setImportAddress(e.target.value);
+                  setImportError(null);
+                  setImportResult(null);
+                }}
+                placeholder="0x..."
+                className="input w-full font-mono text-sm"
+                disabled={importLoading}
+                autoFocus
+              />
+            </div>
+
+            {/* Error */}
+            {importError && (
+              <div className="rounded-xl p-3 text-sm" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444' }}>
+                {importError}
+              </div>
+            )}
+
+            {/* Incompatible result */}
+            {importResult && !importResult.compatible && (
+              <div className="rounded-xl p-3 text-sm space-y-1" style={{ backgroundColor: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', color: 'rgb(217, 119, 6)' }}>
+                <p className="font-medium">Incompatible Safe</p>
+                <p className="text-xs">{importResult.incompatibilityReason}</p>
+                {importResult.partial && importResult.owners.length > 0 && (
+                  <p className="text-xs mt-1 italic">Salt nonce could not be recovered — cross-chain deployment is not possible without it.</p>
+                )}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-surface text-primary-themed hover:bg-surface-inner transition-colors font-medium text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={importLoading || !importAddress.trim()}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-primary text-white font-medium text-sm transition-all hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {importLoading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Looking up...
+                  </>
+                ) : 'Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Configuration */}
       <div className="card">
         <h3 className="text-lg font-semibold mb-4 text-primary-themed">Safe Configuration</h3>
@@ -658,7 +907,7 @@ export default function SafeMinerPanel() {
               Deploy Network
             </label>
             <div className="flex flex-wrap gap-1.5 sm:gap-2">
-              {enabledNetworks.map((network: { chainId: number; name: string }) => (
+              {enabledNetworks.map((network: { chainId: number; name: string; testnet?: boolean }) => (
                 <button
                   key={network.chainId}
                   type="button"
@@ -670,7 +919,7 @@ export default function SafeMinerPanel() {
                       : 'bg-button-inactive border-surface text-secondary-themed hover:border-primary/50'
                   } ${miningState.isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
-                  <NetworkLogo chainId={network.chainId} className="network-logo w-4 h-4 sm:w-5 sm:h-5" />
+                  <NetworkLogoWithBadge chainId={network.chainId} testnet={network.testnet} className="network-logo w-4 h-4 sm:w-5 sm:h-5" />
                   <span>{network.name}</span>
                 </button>
               ))}

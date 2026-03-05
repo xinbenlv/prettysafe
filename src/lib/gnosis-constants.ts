@@ -2,7 +2,7 @@
 // These contracts are deployed at IDENTICAL addresses on all supported networks
 // This allows users to deploy Safes to the same address across multiple chains
 
-import { mainnet, base } from 'viem/chains';
+import { mainnet, base, arbitrum, optimism, polygon, gnosis, sepolia, baseSepolia, polygonMumbai } from 'viem/chains';
 import type { Chain } from 'viem';
 
 // Zero address for unused parameters
@@ -30,7 +30,9 @@ export interface NetworkConfig {
   shortName: string;
   explorerUrl: string;
   safeAppPrefix: string;
+  safeServiceHost: string;
   enabled: boolean;
+  testnet?: boolean;
 }
 
 // Ethereum and Base are fully supported
@@ -42,6 +44,7 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     shortName: 'eth',
     explorerUrl: 'https://etherscan.io',
     safeAppPrefix: 'eth',
+    safeServiceHost: 'safe-transaction-mainnet.safe.global',
     enabled: true,
   },
   [base.id]: {
@@ -50,17 +53,79 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     shortName: 'base',
     explorerUrl: 'https://basescan.org',
     safeAppPrefix: 'base',
+    safeServiceHost: 'safe-transaction-base.safe.global',
     enabled: true,
+  },
+  [arbitrum.id]: {
+    chain: arbitrum,
+    name: 'Arbitrum One',
+    shortName: 'arb1',
+    explorerUrl: 'https://arbiscan.io',
+    safeAppPrefix: 'arb1',
+    safeServiceHost: 'safe-transaction-arbitrum.safe.global',
+    enabled: true,
+  },
+  [optimism.id]: {
+    chain: optimism,
+    name: 'Optimism',
+    shortName: 'oeth',
+    explorerUrl: 'https://optimistic.etherscan.io',
+    safeAppPrefix: 'oeth',
+    safeServiceHost: 'safe-transaction-optimism.safe.global',
+    enabled: true,
+  },
+  [polygon.id]: {
+    chain: polygon,
+    name: 'Polygon',
+    shortName: 'matic',
+    explorerUrl: 'https://polygonscan.com',
+    safeAppPrefix: 'matic',
+    safeServiceHost: 'safe-transaction-polygon.safe.global',
+    enabled: true,
+  },
+  [gnosis.id]: {
+    chain: gnosis,
+    name: 'Gnosis',
+    shortName: 'gno',
+    explorerUrl: 'https://gnosisscan.io',
+    safeAppPrefix: 'gno',
+    safeServiceHost: 'safe-transaction-gnosis.safe.global',
+    enabled: true,
+  },
+  [sepolia.id]: {
+    chain: sepolia,
+    name: 'Sepolia',
+    shortName: 'sep',
+    explorerUrl: 'https://sepolia.etherscan.io',
+    safeAppPrefix: 'sep',
+    safeServiceHost: 'safe-transaction-sepolia.safe.global',
+    enabled: true,
+    testnet: true,
+  },
+  [baseSepolia.id]: {
+    chain: baseSepolia,
+    name: 'Base Sepolia',
+    shortName: 'basesep',
+    explorerUrl: 'https://sepolia.basescan.org',
+    safeAppPrefix: 'basesep',
+    safeServiceHost: 'safe-transaction-base-sepolia.safe.global',
+    enabled: true,
+    testnet: true,
+  },
+  [polygonMumbai.id]: {
+    chain: polygonMumbai,
+    name: 'Mumbai',
+    shortName: 'mumbai',
+    explorerUrl: 'https://mumbai.polygonscan.com',
+    safeAppPrefix: 'mumbai',
+    safeServiceHost: 'safe-transaction-mumbai.safe.global',
+    enabled: true,
+    testnet: true,
   },
 };
 
 // Coming soon networks (for UI display only)
-export const COMING_SOON_NETWORKS = [
-  { name: 'Arbitrum One', chainId: 42161 },
-  { name: 'Optimism', chainId: 10 },
-  { name: 'Polygon', chainId: 137 },
-  { name: 'Gnosis', chainId: 100 },
-];
+export const COMING_SOON_NETWORKS: { name: string; chainId: number }[] = [];
 
 // Default to Base network
 export const DEFAULT_CHAIN_ID = base.id;
@@ -89,6 +154,24 @@ export const PROXY_FACTORY_ABI = [
     name: 'createProxyWithNonce',
     outputs: [{ name: 'proxy', type: 'address' }],
     stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const;
+
+// Safe read-only ABI for on-chain queries (fallback path)
+export const SAFE_READONLY_ABI = [
+  {
+    inputs: [],
+    name: 'getOwners',
+    outputs: [{ name: '', type: 'address[]' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'getThreshold',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
     type: 'function',
   },
 ] as const;
