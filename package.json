@@ -10,7 +10,14 @@
     "benchmark": "bun run benchmark.ts",
     "test": "bun run test.ts",
     "test:derivation": "npx tsx src/lib/test-derivation.ts",
-    "mine": "bun run mine.ts"
+    "mine": "bun run mine.ts",
+    "keyminer": "bun run keyminer.ts",
+    "keyminer:test": "bun run keyminer-test.ts",
+    "keyminer:e2e": "bun run keyminer-e2e-test.ts",
+    "keyminer:verify-all": "bun run tests/test-keyminer-verify-all.ts",
+    "test:field": "bun run tests/test-secp256k1-field.ts",
+    "test:keccak": "bun run tests/test-keccak256.ts",
+    "test:ec": "bun run tests/test-secp256k1-ec.ts"
   },
   "dependencies": {
     "@metamask/jazzicon": "^2.0.0",

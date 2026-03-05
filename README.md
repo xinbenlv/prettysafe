@@ -153,9 +153,12 @@ prettysafe/
 │   └── lib/                   # Utilities
 ├── ⚙️ Shaders
 │   ├── gnosis-create2.wgsl    # Safe address mining
+│   ├── keyminer.wgsl          # secp256k1 + Keccak-256 for private key mining
 │   └── keccak.wgsl            # Keccak-256 implementation
 ├── 🔧 CLI Tools
-│   ├── mine.ts                # Headless CLI miner
+│   ├── mine.ts                # Headless CLI miner (Safe CREATE2)
+│   ├── keyminer.ts            # Private key vanity miner (secp256k1 on GPU)
+│   ├── keyminer-test.ts       # Verification tests for keyminer
 │   ├── benchmark.ts           # Performance testing
 │   └── test.ts                # Validation suite
 └── 📋 Config files
@@ -190,6 +193,30 @@ bun run mine -- --owners 0xABC... --url http://localhost:5173
 ```
 
 Deploy links include all parameters needed to deploy: `http://localhost:5173?owners=0xABC...&threshold=1&salt=0x2a`
+
+### Private Key Vanity Miner
+
+Mine EVM vanity addresses by iterating private keys on the GPU. The full pipeline (secp256k1 EC multiply + Keccak-256) runs in WGSL with pure 32-bit arithmetic.
+
+Each run gets a random 128-bit key prefix, so multiple instances can mine in parallel without overlapping. Results auto-resume per prefix.
+
+```bash
+bun run keyminer                              # Random start range
+bun run keyminer -- --start-key 0xABCD...     # Specific start key
+bun run keyminer -- --leading-zeros 10        # Target 10 leading zeros
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--start-key` | Starting private key (hex) | Random 128-bit prefix |
+| `--leading-zeros` | Stop after N leading zeros | `8` |
+| `--no-resume` | Start fresh | `false` |
+
+> **Security:** Private keys are displayed in the terminal. Test keys in `keyminer-test.ts` are public and not safe for any real use.
+
+```bash
+bun run keyminer:test   # Verify key→address→sign→recover pipeline
+```
 
 ### Benchmark
 
