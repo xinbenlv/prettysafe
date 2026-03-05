@@ -370,22 +370,26 @@ const bindGroup = device.createBindGroup({
   ],
 });
 
+// Pre-allocated reusable arrays
+const initResults = new Uint32Array(14);
+initResults.fill(0xffffffff);
+initResults[13] = 0; // found = 0
+const clearDebug = new Uint32Array(32);
+const paramsData = new Uint32Array(24);
+
 function writeGpuBest() {
-  const initResults = new Uint32Array(14);
-  initResults.fill(0xffffffff);
-  initResults[13] = 0; // found = 0
   device.queue.writeBuffer(resultsBuffer, 0, initResults);
-  // Clear debug buffer
-  device.queue.writeBuffer(debugBuffer, 0, new Uint32Array(32));
+  device.queue.writeBuffer(debugBuffer, 0, clearDebug);
 }
 
+// Full dispatch with debug readback (used by tests/warmup)
 const runOneDispatch = async (offset: number): Promise<{ results: Uint32Array; debug: Uint32Array }> => {
   writeGpuBest();
 
   const baseScalar = startKeyBigInt + BigInt(offset);
   const basePoint = computeECPoint(baseScalar);
 
-  const paramsData = new Uint32Array(24);
+  paramsData.fill(0);
   if (basePoint) {
     for (let i = 0; i < 8; i++) paramsData[i] = basePoint.x[i];
     for (let i = 0; i < 8; i++) paramsData[8 + i] = basePoint.y[i];
@@ -414,6 +418,38 @@ const runOneDispatch = async (offset: number): Promise<{ results: Uint32Array; d
   debugReadbackBuffer.unmap();
 
   return { results: resultData, debug: debugData };
+};
+
+// Fast dispatch for mining loop: no debug buffer copy/readback
+const runMiningDispatch = async (offset: number): Promise<Uint32Array> => {
+  device.queue.writeBuffer(resultsBuffer, 0, initResults);
+
+  const baseScalar = startKeyBigInt + BigInt(offset);
+  const basePoint = computeECPoint(baseScalar);
+
+  paramsData.fill(0);
+  if (basePoint) {
+    for (let i = 0; i < 8; i++) paramsData[i] = basePoint.x[i];
+    for (let i = 0; i < 8; i++) paramsData[8 + i] = basePoint.y[i];
+  }
+  const scalarLimbs = hexToLimbs(bigintToHex64(baseScalar));
+  for (let i = 0; i < 8; i++) paramsData[16 + i] = scalarLimbs[i];
+  device.queue.writeBuffer(paramsBuffer, 0, paramsData);
+
+  const commandEncoder = device.createCommandEncoder();
+  const pass = commandEncoder.beginComputePass();
+  pass.setPipeline(pipeline);
+  pass.setBindGroup(0, bindGroup);
+  pass.dispatchWorkgroups(DISPATCH_X, DISPATCH_Y);
+  pass.end();
+  commandEncoder.copyBufferToBuffer(resultsBuffer, 0, readbackBuffer, 0, RESULTS_SIZE);
+  device.queue.submit([commandEncoder.finish()]);
+
+  await readbackBuffer.mapAsync(GPUMapMode.READ);
+  const resultData = new Uint32Array(readbackBuffer.getMappedRange().slice(0));
+  readbackBuffer.unmap();
+
+  return resultData;
 };
 
 // ── CPU verification ──────────────────────────────────────────────────
@@ -490,7 +526,7 @@ process.on("SIGINT", () => {
 console.log(`Mining started. Press Ctrl+C to stop.\n`);
 
 while (!stopping) {
-  const { results: resultData } = await runOneDispatch(currentOffset);
+  const resultData = await runMiningDispatch(currentOffset);
   const found = resultData[13] === 1;
 
   if (found) {

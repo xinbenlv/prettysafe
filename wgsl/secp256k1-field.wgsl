@@ -205,12 +205,52 @@ fn mod_reduce(wide: array<u32, 16>) -> array<u32, 8> {
     return r;
 }
 
+// Optimized squaring: a^2 using symmetry (36 mul32 instead of 64)
+// a^2 = sum_i a[i]^2 * 2^(64i) + 2 * sum_{i<j} a[i]*a[j] * 2^(32(i+j))
+fn u256_sqr_wide(a: array<u32, 8>) -> array<u32, 16> {
+    var r: array<u32, 16>;
+    for (var i = 0u; i < 16u; i++) { r[i] = 0u; }
+
+    // Cross terms (i < j): 28 mul32 calls
+    for (var i = 0u; i < 7u; i++) {
+        var carry = 0u;
+        for (var j = i + 1u; j < 8u; j++) {
+            let p = mul32(a[i], a[j]);
+            let t1 = add32c(r[i + j], p.x, carry);
+            r[i + j] = t1.x;
+            carry = p.y + t1.y;
+        }
+        r[i + 8u] = r[i + 8u] + carry;
+    }
+
+    // Double all cross terms (left shift by 1 bit)
+    var top = 0u;
+    for (var i = 0u; i < 16u; i++) {
+        let new_val = (r[i] << 1u) | top;
+        top = r[i] >> 31u;
+        r[i] = new_val;
+    }
+
+    // Add diagonal terms: a[i]^2 (8 mul32 calls)
+    var carry2 = 0u;
+    for (var i = 0u; i < 8u; i++) {
+        let p = mul32(a[i], a[i]);
+        let t1 = add32c(r[2u * i], p.x, carry2);
+        r[2u * i] = t1.x;
+        let t2 = add32c(r[2u * i + 1u], p.y, t1.y);
+        r[2u * i + 1u] = t2.x;
+        carry2 = t2.y;
+    }
+
+    return r;
+}
+
 fn mod_mul(a: array<u32, 8>, b: array<u32, 8>) -> array<u32, 8> {
     return mod_reduce(u256_mul_wide(a, b));
 }
 
 fn mod_sqr(a: array<u32, 8>) -> array<u32, 8> {
-    return mod_mul(a, a);
+    return mod_reduce(u256_sqr_wide(a));
 }
 
 fn mod_dbl(a: array<u32, 8>) -> array<u32, 8> {

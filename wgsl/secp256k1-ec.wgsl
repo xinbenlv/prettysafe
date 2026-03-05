@@ -93,7 +93,7 @@ fn ec_add_mixed(p: ECPoint, qx: array<u32, 8>, qy: array<u32, 8>) -> ECPoint {
 
     var z3 = mod_add(p.z, h);
     z3 = mod_sqr(z3);
-    z3 = mod_sub(z3, mod_sqr(p.z));
+    z3 = mod_sub(z3, z1z1);
     z3 = mod_sub(z3, hh);
 
     return ECPoint(x3, y3, z3);
