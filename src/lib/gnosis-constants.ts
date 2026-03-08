@@ -3,7 +3,21 @@
 // This allows users to deploy Safes to the same address across multiple chains
 
 import { mainnet, base, arbitrum, optimism, polygon, gnosis, sepolia, baseSepolia, polygonMumbai } from 'viem/chains';
-import type { Chain } from 'viem';
+import { defineChain, type Chain } from 'viem';
+
+// Robinhood Chain Testnet (Arbitrum Orbit L2, chain ID 46630)
+export const robinhoodTestnet = defineChain({
+  id: 46630,
+  name: 'Robinhood Chain Testnet',
+  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+  rpcUrls: {
+    default: { http: ['https://rpc.testnet.chain.robinhood.com'] },
+  },
+  blockExplorers: {
+    default: { name: 'Robinhood Explorer', url: 'https://explorer.testnet.chain.robinhood.com' },
+  },
+  testnet: true,
+});
 
 // Zero address for unused parameters
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
@@ -54,7 +68,7 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     explorerUrl: 'https://basescan.org',
     safeAppPrefix: 'base',
     safeServiceHost: 'safe-transaction-base.safe.global',
-    enabled: true,
+    enabled: false,
   },
   [arbitrum.id]: {
     chain: arbitrum,
@@ -72,7 +86,7 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     explorerUrl: 'https://optimistic.etherscan.io',
     safeAppPrefix: 'oeth',
     safeServiceHost: 'safe-transaction-optimism.safe.global',
-    enabled: true,
+    enabled: false,
   },
   [polygon.id]: {
     chain: polygon,
@@ -81,7 +95,7 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     explorerUrl: 'https://polygonscan.com',
     safeAppPrefix: 'matic',
     safeServiceHost: 'safe-transaction-polygon.safe.global',
-    enabled: true,
+    enabled: false,
   },
   [gnosis.id]: {
     chain: gnosis,
@@ -90,7 +104,7 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     explorerUrl: 'https://gnosisscan.io',
     safeAppPrefix: 'gno',
     safeServiceHost: 'safe-transaction-gnosis.safe.global',
-    enabled: true,
+    enabled: false,
   },
   [sepolia.id]: {
     chain: sepolia,
@@ -99,7 +113,7 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     explorerUrl: 'https://sepolia.etherscan.io',
     safeAppPrefix: 'sep',
     safeServiceHost: 'safe-transaction-sepolia.safe.global',
-    enabled: true,
+    enabled: false,
     testnet: true,
   },
   [baseSepolia.id]: {
@@ -109,7 +123,7 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     explorerUrl: 'https://sepolia.basescan.org',
     safeAppPrefix: 'basesep',
     safeServiceHost: 'safe-transaction-base-sepolia.safe.global',
-    enabled: true,
+    enabled: false,
     testnet: true,
   },
   [polygonMumbai.id]: {
@@ -119,8 +133,17 @@ export const SUPPORTED_NETWORKS: Record<number, NetworkConfig> = {
     explorerUrl: 'https://mumbai.polygonscan.com',
     safeAppPrefix: 'mumbai',
     safeServiceHost: 'safe-transaction-mumbai.safe.global',
-    enabled: true,
+    enabled: false,
     testnet: true,
+  },
+  [robinhoodTestnet.id]: {
+    chain: robinhoodTestnet,
+    name: 'Robinhood Testnet',
+    shortName: 'rhood',
+    explorerUrl: 'https://explorer.testnet.chain.robinhood.com',
+    safeAppPrefix: 'rhood',
+    safeServiceHost: '',
+    enabled: true,
   },
 };
 

@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { isAddress, getAddress, type Address, type Hex } from 'viem';
 import { useSafeMiner } from '../hooks/useSafeMiner';
 import { countLeadingZeros, deriveSafeAddress, type SafeConfig } from '../lib/safe-encoder';
-import { getEnabledNetworks, getComingSoonNetworks, connectWallet, getWalletState, isWalletAvailable, type WalletState } from '../lib/wallet';
+import { getEnabledNetworks, getDisabledNetworks, getComingSoonNetworks, connectWallet, getWalletState, isWalletAvailable, type WalletState } from '../lib/wallet';
 import { PROXY_FACTORY, PROXY_CREATION_CODE_HASH } from '../lib/gnosis-constants';
 import { lookupSafe, type SafeLookupResult, type LookupError } from '../lib/safe-lookup';
 import DeployPanel from './DeployPanel';
@@ -85,6 +85,14 @@ function NetworkLogoWithBadge({ chainId, testnet, className = "w-5 h-5" }: { cha
   );
 }
 
+function RobinhoodLogo({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 115.87 149.53" xmlns="http://www.w3.org/2000/svg">
+      <path fill="#cf0" d="m.86,149.53h3.3c.6,0,1.2-.3,1.4-.8C30.46,85.33,57.56,53.93,74.56,35.13c.7-.8.4-1.4-.6-1.4h-30.4c-1.1,0-2.03.44-2.8,1.4l-21.8,27c-3.2,4-4,7.7-4,13v27.6C7.86,122.63,3.36,136.13.06,148.33c-.2.78.1,1.2.8,1.2ZM110.56,4.03c-4.7-5-25.9-5.2-35.7-1.4-2.04.79-4,2.13-4.9,2.9-9,7.7-15,13.8-20.7,19.8-.7.7-.4,1.4.6,1.4h33.7c3.1,0,4.9,1.8,4.9,4.9v38c0,1,.8,1.3,1.4.4l20.3-26.5c3.3-4.3,4.3-5.6,5.2-11.6,1.2-8.8.5-22.3-4.8-27.9Zm-43.5,100.8l13.9-22.9c.3-.6.4-1.3.4-1.8v-38.2c0-1-.7-1.4-1.4-.6-20.9,23.3-37.2,47.8-52.3,77.3-.38.74.1,1.4,1,1.1l31.2-9.6c3.52-1.08,5.5-2.5,7.2-5.3Z"/>
+    </svg>
+  );
+}
+
 function NetworkLogo({ chainId, className = "w-5 h-5" }: { chainId: number; className?: string }) {
   switch (chainId) {
     case 1:
@@ -104,6 +112,8 @@ function NetworkLogo({ chainId, className = "w-5 h-5" }: { chainId: number; clas
       return <GnosisLogo className={className} />;
     case 11155111: // Sepolia
       return <EthereumLogo className={className} />;
+    case 46630: // Robinhood Testnet
+      return <RobinhoodLogo className={className} />;
     default:
       return <div className={`${className} bg-gray-500 rounded-full`} />;
   }
@@ -254,7 +264,9 @@ export default function SafeMinerPanel() {
   const [hashesAtLock, setHashesAtLock] = useState<number>(0);
 
   const enabledNetworks = getEnabledNetworks();
+  const disabledNetworks = getDisabledNetworks();
   const comingSoonNetworks = getComingSoonNetworks();
+  const [showMoreNetworks, setShowMoreNetworks] = useState(false);
 
   const {
     status,
@@ -901,47 +913,6 @@ export default function SafeMinerPanel() {
             </span>
           </div>
 
-          {/* Network Selection with Logos */}
-          <div>
-            <label className="block text-primary-themed font-medium mb-2">
-              Deploy Network
-            </label>
-            <div className="flex flex-wrap gap-1.5 sm:gap-2">
-              {enabledNetworks.map((network: { chainId: number; name: string; testnet?: boolean }) => (
-                <button
-                  key={network.chainId}
-                  type="button"
-                  onClick={() => setSelectedChainId(network.chainId)}
-                  disabled={miningState.isRunning}
-                  className={`network-btn flex items-center gap-1.5 sm:gap-2 px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border transition-all text-xs sm:text-sm ${
-                    selectedChainId === network.chainId
-                      ? 'bg-primary/10 border-primary text-primary-themed'
-                      : 'bg-button-inactive border-surface text-secondary-themed hover:border-primary/50'
-                  } ${miningState.isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                >
-                  <NetworkLogoWithBadge chainId={network.chainId} testnet={network.testnet} className="network-logo w-4 h-4 sm:w-5 sm:h-5" />
-                  <span>{network.name}</span>
-                </button>
-              ))}
-              {comingSoonNetworks.map((network: { chainId: number; name: string }) => (
-                <button
-                  key={network.chainId}
-                  type="button"
-                  disabled
-                  className="network-btn flex items-center gap-1.5 sm:gap-2 px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border bg-button-inactive border-surface text-secondary-themed opacity-50 cursor-not-allowed text-xs sm:text-sm"
-                  title="Coming Soon"
-                >
-                  <div className="network-logo w-4 h-4 sm:w-5 sm:h-5 bg-surface-inner rounded-full" style={{ backgroundColor: 'var(--color-surface-border)' }} />
-                  <span>{network.name}</span>
-                  <span className="text-[10px] sm:text-xs">(Soon)</span>
-                </button>
-              ))}
-            </div>
-            <p className="text-secondary-themed text-xs mt-2">
-              Same address can be deployed on both Ethereum and Base
-            </p>
-          </div>
-
           {/* Contract Info - Deployer & Init Code Hash */}
           <div className="bg-surface-inner rounded-xl p-4 space-y-3 border border-surface">
             <div>
@@ -1227,6 +1198,73 @@ export default function SafeMinerPanel() {
               })()}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Network Selection with Logos - shown when there's a result to deploy */}
+      {activeResult && (
+        <div className="card p-4">
+          <label className="block text-primary-themed font-medium mb-2">
+            Deploy to Network
+          </label>
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+            {enabledNetworks.map((network: { chainId: number; name: string; testnet?: boolean }) => (
+              <button
+                key={network.chainId}
+                type="button"
+                onClick={() => setSelectedChainId(network.chainId)}
+                className={`network-btn flex items-center gap-1.5 sm:gap-2 px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border transition-all text-xs sm:text-sm ${
+                  selectedChainId === network.chainId
+                    ? 'bg-primary/10 border-primary text-primary-themed'
+                    : 'bg-button-inactive border-surface text-secondary-themed hover:border-primary/50'
+                } cursor-pointer`}
+              >
+                <NetworkLogoWithBadge chainId={network.chainId} testnet={network.testnet} className="network-logo w-4 h-4 sm:w-5 sm:h-5" />
+                <span>{network.name}</span>
+              </button>
+            ))}
+            {comingSoonNetworks.map((network: { chainId: number; name: string }) => (
+              <button
+                key={network.chainId}
+                type="button"
+                disabled
+                className="network-btn flex items-center gap-1.5 sm:gap-2 px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border bg-button-inactive border-surface text-secondary-themed opacity-50 cursor-not-allowed text-xs sm:text-sm"
+                title="Coming Soon"
+              >
+                <div className="network-logo w-4 h-4 sm:w-5 sm:h-5 bg-surface-inner rounded-full" style={{ backgroundColor: 'var(--color-surface-border)' }} />
+                <span>{network.name}</span>
+                <span className="text-[10px] sm:text-xs">(Soon)</span>
+              </button>
+            ))}
+            {disabledNetworks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowMoreNetworks(!showMoreNetworks)}
+                className="network-btn flex items-center gap-1.5 sm:gap-2 px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border bg-button-inactive border-surface text-secondary-themed hover:border-primary/50 cursor-pointer text-xs sm:text-sm"
+              >
+                <span>{showMoreNetworks ? 'Less' : 'More'}</span>
+                <span className="text-[10px]">{showMoreNetworks ? '▲' : '▼'}</span>
+              </button>
+            )}
+            {showMoreNetworks && disabledNetworks.map((network: { chainId: number; name: string; testnet?: boolean }) => (
+              <button
+                key={network.chainId}
+                type="button"
+                onClick={() => setSelectedChainId(network.chainId)}
+                className={`network-btn flex items-center gap-1.5 sm:gap-2 px-2.5 py-2 sm:px-4 sm:py-3 rounded-lg sm:rounded-xl border transition-all text-xs sm:text-sm ${
+                  selectedChainId === network.chainId
+                    ? 'bg-primary/10 border-primary text-primary-themed'
+                    : 'bg-button-inactive border-surface text-secondary-themed hover:border-primary/50 opacity-70'
+                } cursor-pointer`}
+              >
+                <NetworkLogoWithBadge chainId={network.chainId} testnet={network.testnet} className="network-logo w-4 h-4 sm:w-5 sm:h-5" />
+                <span>{network.name}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-secondary-themed text-xs mt-2">
+            Same address can be deployed on any supported network
+          </p>
         </div>
       )}
 

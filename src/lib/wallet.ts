@@ -442,6 +442,19 @@ export function getEnabledNetworks(): Array<{ chainId: number; name: string; tes
 }
 
 /**
+ * Get list of disabled (but supported) networks for "More" section in UI.
+ */
+export function getDisabledNetworks(): Array<{ chainId: number; name: string; testnet?: boolean }> {
+  return Object.entries(SUPPORTED_NETWORKS)
+    .filter(([, config]) => !config.enabled)
+    .map(([chainId, config]) => ({
+      chainId: parseInt(chainId),
+      name: config.name,
+      testnet: config.testnet,
+    }));
+}
+
+/**
  * Get list of coming soon networks for UI display.
  */
 export function getComingSoonNetworks(): Array<{ chainId: number; name: string }> {

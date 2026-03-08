@@ -48,7 +48,7 @@ export type LookupError =
 
 export function getSafeServiceUrl(chainId: number): string | null {
   const config = SUPPORTED_NETWORKS[chainId];
-  if (!config) return null;
+  if (!config || !config.safeServiceHost) return null;
   return `https://${config.safeServiceHost}`;
 }
 
@@ -56,9 +56,13 @@ export async function fetchSafeCreationData(
   address: Address,
   chainId: number
 ): Promise<SafeCreationData> {
+  const config = SUPPORTED_NETWORKS[chainId];
+  if (!config) {
+    throw { type: 'network_error', message: `Unsupported chain ID: ${chainId}` } as LookupError;
+  }
   const baseUrl = getSafeServiceUrl(chainId);
   if (!baseUrl) {
-    throw { type: 'network_error', message: `Unsupported chain ID: ${chainId}` } as LookupError;
+    throw { type: 'network_error', message: `Coming soon! Asking Safe.Global to enable Safe Transaction Service for this chain atm.` } as LookupError;
   }
 
   const url = `${baseUrl}/api/v1/safes/${address}/creation/`;
