@@ -1,5 +1,5 @@
 {
-  "name": "erc8117",
+  "name": "@ercref/erc8117",
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
@@ -13,6 +13,9 @@
     }
   },
   "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"

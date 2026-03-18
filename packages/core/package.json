@@ -17,6 +17,9 @@
     }
   },
   "files": ["dist", "shaders.d.ts", "src/shaders/**/*.wgsl"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch"

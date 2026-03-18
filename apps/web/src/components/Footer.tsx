@@ -67,6 +67,26 @@ export default function Footer() {
         </a>{' '}
         <span className="hidden sm:inline">(Compressed Address Display)</span>
       </p>
+      <p className="text-[10px] sm:text-xs" style={{ color: 'var(--color-text-secondary)', opacity: 0.6 }}>
+        npm:{' '}
+        <a
+          href="https://www.npmjs.com/package/@prettysafe/core"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-primary transition-colors"
+        >
+          @prettysafe/core
+        </a>
+        {' '}•{' '}
+        <a
+          href="https://www.npmjs.com/package/@ercref/erc8117"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-primary transition-colors"
+        >
+          @ercref/erc8117
+        </a>
+      </p>
     </footer>
   );
 }

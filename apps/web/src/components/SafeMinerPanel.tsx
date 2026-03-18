@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { isAddress, getAddress, type Address, type Hex } from 'viem';
 import { useSafeMiner } from '../hooks/useSafeMiner';
 import { countLeadingZeros, deriveSafeAddress, PROXY_FACTORY, PROXY_CREATION_CODE_HASH, type SafeConfig } from '@prettysafe/core';
-import { compressAddressERC8117 } from 'erc8117';
+import { compressAddressERC8117 } from '@ercref/erc8117';
 import { getEnabledNetworks, getDisabledNetworks, getComingSoonNetworks, connectWallet, getWalletState, isWalletAvailable, type WalletState } from '../lib/wallet';
 import { lookupSafe, type SafeLookupResult, type LookupError } from '../lib/safe-lookup';
 import DeployPanel from './DeployPanel';
