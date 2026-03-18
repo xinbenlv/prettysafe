@@ -1,1 +1,1 @@
-export { SUPERSCRIPTS, toSuperscript, compressAddressERC8117 } from './compress';
+export { SUBSCRIPTS, toSubscript, compressAddressERC8117 } from './compress';
