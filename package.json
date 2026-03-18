@@ -1,43 +1,38 @@
 {
   "name": "prettysafe",
   "version": "1.0.0",
+  "private": true,
   "license": "MIT",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "benchmark": "bun run benchmark.ts",
-    "test": "bun run test.ts",
-    "test:derivation": "npx tsx src/lib/test-derivation.ts",
-    "mine": "bun run mine.ts",
-    "keyminer": "bun run keyminer.ts",
-    "keyminer:test": "bun run keyminer-test.ts",
-    "keyminer:e2e": "bun run keyminer-e2e-test.ts",
-    "keyminer:verify-all": "bun run tests/test-keyminer-verify-all.ts",
-    "test:field": "bun run tests/test-secp256k1-field.ts",
-    "test:keccak": "bun run tests/test-keccak256.ts",
-    "test:ec": "bun run tests/test-secp256k1-ec.ts"
+    "dev": "cd apps/web && bun run dev",
+    "build": "cd packages/erc8117 && bun run build && cd ../core && bun run build && cd ../../apps/web && bun run build",
+    "build:packages": "cd packages/erc8117 && bun run build && cd ../core && bun run build",
+    "preview": "cd apps/web && bun run preview",
+    "benchmark": "bun run cli/benchmark.ts",
+    "test": "bun run cli/test.ts",
+    "test:derivation": "npx tsx apps/web/src/lib/test-derivation.ts",
+    "mine": "bun run cli/mine.ts",
+    "keyminer": "bun run cli/keyminer.ts",
+    "keyminer:test": "bun run cli/keyminer-test.ts",
+    "keyminer:e2e": "bun run cli/keyminer-e2e-test.ts",
+    "keyminer:verify-all": "bun run packages/core/tests/test-keyminer-verify-all.ts",
+    "test:field": "bun run packages/core/tests/test-secp256k1-field.ts",
+    "test:keccak": "bun run packages/core/tests/test-keccak256.ts",
+    "test:ec": "bun run packages/core/tests/test-secp256k1-ec.ts"
   },
   "dependencies": {
-    "@metamask/jazzicon": "^2.0.0",
     "@webgpu/types": "^0.1.68",
     "bun-webgpu": "^0.1.4",
-    "d3": "^7.9.0",
     "ethers": "^6.16.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "viem": "^2.21.0"
   },
   "devDependencies": {
-    "@types/d3": "^7.4.3",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.0.0",
-    "vite": "^6.0.0"
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
   }
 }

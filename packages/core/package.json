@@ -1,0 +1,32 @@
+{
+  "name": "@prettysafe/core",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./shaders": {
+      "import": "./dist/shaders/index.js",
+      "types": "./shaders.d.ts"
+    }
+  },
+  "files": ["dist", "shaders.d.ts", "src/shaders/**/*.wgsl"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.68",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -7,7 +7,6 @@
     "moduleDetection": "force",
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "composite": true,
     "strict": true,
     "downlevelIteration": true,
     "skipLibCheck": true,
@@ -16,9 +15,8 @@
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
     "types": [
-      "bun-types",
       "@webgpu/types"
     ]
   },
-  "include": ["cli", "packages/*/src", "packages/*/tests"]
+  "include": ["src"]
 }
